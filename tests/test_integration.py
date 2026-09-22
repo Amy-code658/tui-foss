@@ -892,6 +892,41 @@ class TestCyberShellIntegration(unittest.TestCase):
         self.assertIn("byte@adventure:~$ pwd", terminal_logs)
         self.assertIn("✓ Task Cleared", terminal_logs[-1])
 
+    def test_all_fifteen_levels_progression_with_byte_user(self) -> None:
+        """Verify all 15 levels advance and complete seamlessly with default user 'byte'."""
+        from cybershell.engine.vfs import VirtualFileSystem
+        from cybershell.engine.interpreter import Interpreter
+        from cybershell.game.evaluator import QuestEvaluator
+        from cybershell.game.quests import get_sector_quests
+        from cybershell.contracts import PlayerStats
+
+        quests = get_sector_quests()
+        evaluator = QuestEvaluator()
+
+        for sid in range(15):
+            q = quests[sid]
+            vfs = VirtualFileSystem(default_user="byte")
+            vfs.load_sector(sid, q)
+            interp = Interpreter(vfs=vfs)
+            player = PlayerStats(character_name="Byte", hp=100, max_hp=100, xp=0)
+
+            for idx, obj in enumerate(q.objectives):
+                corr_letter = obj.correct_option.upper()
+                opt_idx = ord(corr_letter) - ord("A")
+                cmd = obj.options[opt_idx].split(" - ")[0].strip()
+
+                interp.execute(cmd)
+                evaluator.check_quest_progress(q, vfs, player, last_command=cmd)
+                self.assertTrue(
+                    obj.completed,
+                    f"Level {sid + 1} objective {idx + 1} ({obj.id}) failed on command '{cmd}'",
+                )
+
+            self.assertTrue(
+                q.is_completed,
+                f"Level {sid + 1} ({q.sector_name}) should be completed after all objectives cleared",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

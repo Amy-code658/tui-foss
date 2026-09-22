@@ -579,30 +579,26 @@ class VirtualFileSystem:
             except Exception:
                 quest = None
         if quest is not None and hasattr(quest, "environment_tree") and quest.environment_tree:
+            def _populate(current_path: str, node_data: Any) -> None:
+                if isinstance(node_data, str):
+                    f = self.touch(current_path)
+                    f.write(node_data)
+                elif isinstance(node_data, dict):
+                    if "content" in node_data:
+                        f = self.touch(current_path)
+                        f.write(str(node_data.get("content", "")))
+                        if "permissions" in node_data:
+                            f.chmod(node_data["permissions"])
+                    else:
+                        self.mkdir_p(current_path)
+                        for child_name, child_val in node_data.items():
+                            child_path = posixpath.join(current_path, child_name)
+                            _populate(child_path, child_val)
+
             for item_name, item_val in quest.environment_tree.items():
                 if item_name.startswith("/"):
                     full_path = item_name
                 else:
                     full_path = posixpath.join(self.home_dir, item_name)
-                if isinstance(item_val, str):
-                    f = self.touch(full_path)
-                    f.write(item_val)
-                elif isinstance(item_val, dict):
-                    if "content" in item_val:
-                        f = self.touch(full_path)
-                        f.write(str(item_val.get("content", "")))
-                        if "permissions" in item_val:
-                            f.chmod(item_val["permissions"])
-                    else:
-                        self.mkdir_p(full_path)
-                        for sub_name, sub_val in item_val.items():
-                            sub_path = posixpath.join(full_path, sub_name)
-                            if isinstance(sub_val, str):
-                                sf = self.touch(sub_path)
-                                sf.write(sub_val)
-                            elif isinstance(sub_val, dict) and "content" in sub_val:
-                                sf = self.touch(sub_path)
-                                sf.write(str(sub_val.get("content", "")))
-                                if "permissions" in sub_val:
-                                    sf.chmod(sub_val["permissions"])
+                _populate(full_path, item_val)
 

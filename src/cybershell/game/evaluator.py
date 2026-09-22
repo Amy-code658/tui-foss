@@ -51,38 +51,48 @@ class QuestEvaluator:
         try:
             home_dir = getattr(vfs, "home_dir", "/home/operative")
 
+            def _resolve_target(t: str) -> List[str]:
+                if not t:
+                    return []
+                candidates = [t]
+                if t in ("~", "$HOME"):
+                    candidates.append(home_dir)
+                elif not t.startswith("/"):
+                    candidates.append(f"{home_dir}/{t}")
+                elif t.startswith("/home/"):
+                    parts = t.split("/", 3)
+                    # ['', 'home', '<user>', '<rest>']
+                    if len(parts) >= 4:
+                        candidates.append(f"{home_dir}/{parts[3]}")
+                    elif len(parts) == 3:
+                        candidates.append(home_dir)
+                return candidates
+
             if ptype == "file_exists":
-                exists = vfs.exists(target)
-                if not exists and not target.startswith("/"):
-                    try:
-                        exists = vfs.exists(f"{home_dir}/{target}")
-                    except Exception:
-                        pass
+                exists = any(vfs.exists(c) for c in _resolve_target(target))
                 return exists == bool(expected)
 
             elif ptype == "file_not_exists":
-                exists = vfs.exists(target)
-                if not exists and not target.startswith("/"):
-                    try:
-                        exists = vfs.exists(f"{home_dir}/{target}")
-                    except Exception:
-                        pass
+                exists = any(vfs.exists(c) for c in _resolve_target(target))
                 return (not exists) == bool(expected)
 
             elif ptype == "file_contains":
-                read_target = target
-                if not vfs.exists(read_target):
-                    if not target.startswith("/"):
-                        read_target = f"{home_dir}/{target}"
-                    if not vfs.exists(read_target):
-                        return False
+                read_target = None
+                for c in _resolve_target(target):
+                    if vfs.exists(c):
+                        read_target = c
+                        break
+                if read_target is None:
+                    return False
                 content = vfs.read_file(read_target)
                 return str(expected) in content
 
             elif ptype == "permission_equals":
-                node = vfs.get_node(target)
-                if node is None and not target.startswith("/"):
-                    node = vfs.get_node(f"{home_dir}/{target}")
+                node = None
+                for c in _resolve_target(target):
+                    node = vfs.get_node(c)
+                    if node is not None:
+                        break
                 if node is None:
                     return False
                 mode = str(getattr(node, "mode_octal", ""))
@@ -93,7 +103,7 @@ class QuestEvaluator:
             elif ptype == "cwd_equals":
                 cwd = vfs.get_cwd_path()
                 target_str = str(target)
-                if cwd == target_str:
+                if cwd == target_str or any(cwd == c for c in _resolve_target(target_str)):
                     return True
                 if target_str.startswith("/home/"):
                     sub_parts = target_str.split("/")
@@ -106,10 +116,12 @@ class QuestEvaluator:
                 return False
 
             elif ptype == "file_read":
-                exists = vfs.exists(target)
-                if not exists and not target.startswith("/"):
-                    exists = vfs.exists(f"{home_dir}/{target}")
-                if not exists:
+                read_target = None
+                for c in _resolve_target(target):
+                    if vfs.exists(c):
+                        read_target = c
+                        break
+                if read_target is None:
                     return False
                 if last_command:
                     target_name = target.split("/")[-1]
@@ -120,7 +132,7 @@ class QuestEvaluator:
                 return False
 
             elif ptype == "pipeline_used":
-                if last_command and "|" in last_command:
+                if last_command and ("|" in last_command or "<" in last_command or ">" in last_command):
                     low_cmd = last_command.lower()
                     target_name = target.split("/")[-1] if target else ""
                     if target and (target.lower() not in low_cmd and target_name.lower() not in low_cmd):

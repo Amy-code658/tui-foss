@@ -38,7 +38,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="pwd",
                 explanation="Prints your current working directory path.",
                 predicate_type="cwd_equals",
-                predicate_target="/home/operative",
+                predicate_target="~",
                 xp_reward=50,
                 hints=[
                     "Which command prints your current folder location?",
@@ -63,7 +63,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="ls",
                 explanation="Lists the files and folders in your current location.",
                 predicate_type="cwd_equals",
-                predicate_target="/home/operative",
+                predicate_target="~",
                 xp_reward=50,
                 hints=[
                     "Use the list command to see nearby files and folders.",
@@ -117,7 +117,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="cd garden",
                 explanation="Changes your current directory to the garden folder.",
                 predicate_type="cwd_equals",
-                predicate_target="/home/operative/garden",
+                predicate_target="garden",
                 xp_reward=50,
                 hints=[
                     "Use the change directory command 'cd' with 'garden'.",
@@ -142,7 +142,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="cd ..",
                 explanation="'..' refers to the parent folder one level up.",
                 predicate_type="cwd_equals",
-                predicate_target="/home/operative",
+                predicate_target="~",
                 xp_reward=50,
                 hints=[
                     "Two dots (..) represent the folder above you.",
@@ -449,7 +449,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="cp seed.txt flower.txt",
                 explanation="Copies source file to destination.",
                 predicate_type="file_exists",
-                predicate_target="/home/operative/flower.txt",
+                predicate_target="flower.txt",
                 xp_reward=50,
                 hints=[
                     "The copy command is 'cp'.",
@@ -474,7 +474,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="mv flower.txt garden/flower.txt",
                 explanation="Moves a file into a destination directory.",
                 predicate_type="file_exists",
-                predicate_target="/home/operative/garden/flower.txt",
+                predicate_target="garden/flower.txt",
                 xp_reward=50,
                 hints=[
                     "The move command is 'mv'.",
@@ -529,7 +529,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="mkdir greenhouse",
                 explanation="Creates a new directory.",
                 predicate_type="file_exists",
-                predicate_target="/home/operative/greenhouse",
+                predicate_target="greenhouse",
                 xp_reward=35,
                 hints=[
                     "The make directory command is 'mkdir'.",
@@ -554,7 +554,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="touch greenhouse/sprout.txt",
                 explanation="Creates an empty file if it does not already exist.",
                 predicate_type="file_exists",
-                predicate_target="/home/operative/greenhouse/sprout.txt",
+                predicate_target="greenhouse/sprout.txt",
                 xp_reward=35,
                 hints=[
                     "Use 'touch' followed by the path.",
@@ -579,7 +579,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="rm old_trash.txt",
                 explanation="Removes specified file permanently.",
                 predicate_type="file_not_exists",
-                predicate_target="/home/operative/old_trash.txt",
+                predicate_target="old_trash.txt",
                 xp_reward=30,
                 hints=[
                     "The remove command is 'rm'.",
@@ -633,7 +633,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="chmod 755 run_me.sh",
                 explanation="Modifies file access permissions.",
                 predicate_type="permission_equals",
-                predicate_target="/home/operative/run_me.sh",
+                predicate_target="run_me.sh",
                 predicate_expected="755",
                 xp_reward=100,
                 hints=[
@@ -824,7 +824,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax='echo "Sunny day" > journal.txt',
                 explanation="Redirects output to a file, overwriting existing contents.",
                 predicate_type="file_contains",
-                predicate_target="/home/operative/journal.txt",
+                predicate_target="journal.txt",
                 predicate_expected="Sunny day",
                 xp_reward=50,
                 hints=[
@@ -850,7 +850,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax='echo "Gentle breeze" >> journal.txt',
                 explanation="Appends output to the end of a file without overwriting.",
                 predicate_type="file_contains",
-                predicate_target="/home/operative/journal.txt",
+                predicate_target="journal.txt",
                 predicate_expected="Gentle breeze",
                 xp_reward=50,
                 hints=[
@@ -980,7 +980,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax="rm -r weeds",
                 explanation="Recursively removes a directory.",
                 predicate_type="file_not_exists",
-                predicate_target="/home/operative/weeds",
+                predicate_target="weeds",
                 xp_reward=35,
                 hints=[
                     "Pass the '-r' (recursive) flag to 'rm'.",
@@ -1113,7 +1113,7 @@ def get_sector_quests() -> Dict[int, Quest]:
                 syntax='echo "I_LOVE_LINUX" > trophy.txt',
                 explanation="Writes your victory proclamation into the trophy file.",
                 predicate_type="file_contains",
-                predicate_target="/home/operative/trophy.txt",
+                predicate_target="trophy.txt",
                 predicate_expected="I_LOVE_LINUX",
                 xp_reward=150,
                 hints=[
