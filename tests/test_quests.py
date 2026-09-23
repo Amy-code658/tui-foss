@@ -26,10 +26,10 @@ class TestQuests(unittest.TestCase):
     def setUp(self) -> None:
         self.quests = get_sector_quests()
 
-    def test_six_sectors_in_order(self) -> None:
-        """Verify all 6 sectors (0-5) are present."""
-        self.assertEqual(len(self.quests), 6)
-        self.assertEqual(sorted(self.quests.keys()), [0, 1, 2, 3, 4, 5])
+    def test_fifteen_levels_in_order(self) -> None:
+        """Verify all 15 adventure levels (0-14) are present."""
+        self.assertEqual(len(self.quests), 15)
+        self.assertEqual(sorted(self.quests.keys()), list(range(15)))
 
     def test_unique_quest_and_objective_ids(self) -> None:
         """Ensure all quest and objective IDs are unique across sectors."""
@@ -60,6 +60,9 @@ class TestQuests(unittest.TestCase):
             "file_contains",
             "permission_equals",
             "cwd_equals",
+            "file_read",
+            "pipeline_used",
+            "pattern_matched",
         }
         for quest in self.quests.values():
             for obj in quest.objectives:
@@ -69,6 +72,20 @@ class TestQuests(unittest.TestCase):
                 self.assertIn(obj.predicate_type, valid_predicates)
                 self.assertTrue(obj.predicate_target)
                 self.assertGreater(obj.xp_reward, 0)
+
+    def test_four_options_per_objective(self) -> None:
+        """Verify each objective across all 15 levels has 4 options and valid correct_option."""
+        for q_idx, quest in self.quests.items():
+            for obj in quest.objectives:
+                self.assertTrue(obj.question, f"Objective {obj.id} in quest {q_idx} is missing a question")
+                self.assertEqual(
+                    len(obj.options), 4,
+                    f"Objective {obj.id} in quest {q_idx} must have exactly 4 options, found {len(obj.options)}"
+                )
+                self.assertIn(
+                    obj.correct_option.upper(), {"A", "B", "C", "D"},
+                    f"Objective {obj.id} has invalid correct_option {obj.correct_option}"
+                )
 
 
 if __name__ == "__main__":

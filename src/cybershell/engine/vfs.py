@@ -568,3 +568,41 @@ class VirtualFileSystem:
             return result
 
         return _dump(node)  # type: ignore[arg-type]
+
+    def load_sector(self, sector_id: int, quest: Optional[Any] = None) -> None:
+        """Load specific files and environment tree for a sector into VFS."""
+        if quest is None:
+            try:
+                from cybershell.game.quests import get_sector_quests
+                all_q = get_sector_quests()
+                quest = all_q.get(sector_id)
+            except Exception:
+                quest = None
+        if quest is not None and hasattr(quest, "environment_tree") and quest.environment_tree:
+            for item_name, item_val in quest.environment_tree.items():
+                if item_name.startswith("/"):
+                    full_path = item_name
+                else:
+                    full_path = posixpath.join(self.home_dir, item_name)
+                if isinstance(item_val, str):
+                    f = self.touch(full_path)
+                    f.write(item_val)
+                elif isinstance(item_val, dict):
+                    if "content" in item_val:
+                        f = self.touch(full_path)
+                        f.write(str(item_val.get("content", "")))
+                        if "permissions" in item_val:
+                            f.chmod(item_val["permissions"])
+                    else:
+                        self.mkdir_p(full_path)
+                        for sub_name, sub_val in item_val.items():
+                            sub_path = posixpath.join(full_path, sub_name)
+                            if isinstance(sub_val, str):
+                                sf = self.touch(sub_path)
+                                sf.write(sub_val)
+                            elif isinstance(sub_val, dict) and "content" in sub_val:
+                                sf = self.touch(sub_path)
+                                sf.write(str(sub_val.get("content", "")))
+                                if "permissions" in sub_val:
+                                    sf.chmod(sub_val["permissions"])
+

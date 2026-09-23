@@ -19,8 +19,7 @@ class ShellInterpreter:
 
     def execute(self, command_line: str) -> CommandResult:
         """Execute one command line and apply combat backlash to invalid syntax/commands."""
-        if hasattr(self.vfs, "last_command"):
-            self.vfs.last_command = command_line
+        self.vfs.last_command = command_line
 
         tokens, error = self.tokenize(command_line)
         if error is not None:
@@ -28,11 +27,17 @@ class ShellInterpreter:
         if not tokens:
             return CommandResult()
 
-        stages, redirect, parse_error = self._parse(tokens)
+        stages, redirect, in_redir, parse_error = self._parse(tokens)
         if parse_error is not None:
             return self._with_backlash(parse_error)
 
         stdin = ""
+        if in_redir is not None:
+            try:
+                stdin = self.vfs.read_file(in_redir)
+            except (FileNotFoundError, NotADirectoryError, IsADirectoryError, PermissionError) as exc:
+                return CommandResult(stderr=f"{exc}\n", exit_code=1)
+
         result = CommandResult()
         for stage in stages:
             result = self.commands.execute(stage, stdin)
@@ -45,7 +50,7 @@ class ShellInterpreter:
             try:
                 self.vfs.write_file(path, result.stdout, append=append)
             except (FileNotFoundError, NotADirectoryError, IsADirectoryError, PermissionError) as exc:
-                return CommandResult(stderr=f"cybershell: {exc}\n", exit_code=1)
+                return CommandResult(stderr=f"{exc}\n", exit_code=1)
             result = CommandResult(stdout="", metadata={"redirect": path, "append": append})
         return result
 
@@ -53,27 +58,39 @@ class ShellInterpreter:
     def tokenize(command_line: str) -> Tuple[List[str], Optional[CommandResult]]:
         """Tokenize quoted strings while retaining pipeline and redirect operators."""
         try:
-            lexer = shlex.shlex(command_line, posix=True, punctuation_chars="|>")
+            lexer = shlex.shlex(command_line, posix=True, punctuation_chars="|><")
             lexer.whitespace_split = True
             lexer.commenters = ""
             return list(lexer), None
         except ValueError as error:
-            return [], CommandResult(stderr=f"cybershell: syntax error: {error}\n", exit_code=2)
+            return [], CommandResult(stderr=f"syntax error: {error}\n", exit_code=2)
 
     @staticmethod
-    def _parse(tokens: Sequence[str]) -> Tuple[List[List[str]], Optional[Tuple[str, bool]], Optional[CommandResult]]:
+    def _parse(tokens: Sequence[str]) -> Tuple[List[List[str]], Optional[Tuple[str, bool]], Optional[str], Optional[CommandResult]]:
         redirect: Optional[Tuple[str, bool]] = None
+        input_redirect: Optional[str] = None
         command_tokens = list(tokens)
+
+        # Handle input redirection '<'
+        in_indices = [index for index, token in enumerate(command_tokens) if token == "<"]
+        if in_indices:
+            in_idx = in_indices[0]
+            if in_idx + 1 >= len(command_tokens) or command_tokens[in_idx + 1] in ("|", ">", ">>", "<"):
+                return [], None, None, CommandResult(stderr="syntax error near unexpected token `<`\n", exit_code=2)
+            input_redirect = command_tokens[in_idx + 1]
+            command_tokens = command_tokens[:in_idx] + command_tokens[in_idx + 2:]
+
+        # Handle output redirection '>' and '>>'
         redirection_indices = [index for index, token in enumerate(command_tokens) if token in (">", ">>")]
         if len(redirection_indices) > 1:
-            return [], None, CommandResult(stderr="cybershell: syntax error near unexpected token `>`\n", exit_code=2)
+            return [], None, None, CommandResult(stderr="syntax error near unexpected token `>`\n", exit_code=2)
         if redirection_indices:
             index = redirection_indices[0]
             if index == 0 or index + 2 != len(command_tokens):
-                return [], None, CommandResult(stderr="cybershell: syntax error near unexpected token `>`\n", exit_code=2)
+                return [], None, None, CommandResult(stderr="syntax error near unexpected token `>`\n", exit_code=2)
             target = command_tokens[index + 1]
-            if target in ("|", ">", ">>"):
-                return [], None, CommandResult(stderr="cybershell: syntax error near unexpected token `>`\n", exit_code=2)
+            if target in ("|", ">", ">>", "<"):
+                return [], None, None, CommandResult(stderr="syntax error near unexpected token `>`\n", exit_code=2)
             redirect = (target, command_tokens[index] == ">>")
             command_tokens = command_tokens[:index]
 
@@ -81,13 +98,13 @@ class ShellInterpreter:
         for token in command_tokens:
             if token == "|":
                 if not stages[-1]:
-                    return [], None, CommandResult(stderr="cybershell: syntax error near unexpected token `|'\n", exit_code=2)
+                    return [], None, None, CommandResult(stderr="syntax error near unexpected token `|'\n", exit_code=2)
                 stages.append([])
             else:
                 stages[-1].append(token)
         if not stages[-1]:
-            return [], None, CommandResult(stderr="cybershell: syntax error near unexpected token `|'\n", exit_code=2)
-        return stages, redirect, None
+            return [], None, None, CommandResult(stderr="syntax error near unexpected token `|'\n", exit_code=2)
+        return stages, redirect, input_redirect, None
 
     @staticmethod
     def _with_backlash(result: CommandResult) -> CommandResult:

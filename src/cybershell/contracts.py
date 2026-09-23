@@ -88,11 +88,16 @@ class Objective:
     command: str = ""
     syntax: str = ""
     explanation: str = ""
-    predicate_type: str = "file_exists"  # file_exists, file_not_exists, file_contains, permission_equals, cwd_equals
+    predicate_type: str = "file_exists"  # file_exists, file_not_exists, file_contains, permission_equals, cwd_equals, file_read, pipeline_used
     predicate_target: str = ""
     predicate_expected: Any = True
     completed: bool = False
     xp_reward: int = 50
+    hints: List[str] = field(default_factory=list)
+    scenario: str = ""
+    question: str = ""
+    options: List[str] = field(default_factory=list)
+    correct_option: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize objective to a dictionary."""
@@ -113,6 +118,11 @@ class Objective:
             predicate_expected=data.get("predicate_expected", True),
             completed=bool(data.get("completed", False)),
             xp_reward=int(data.get("xp_reward", 50)),
+            hints=list(data.get("hints", [])),
+            scenario=str(data.get("scenario", "")),
+            question=str(data.get("question", "")),
+            options=list(data.get("options", [])),
+            correct_option=str(data.get("correct_option", "")),
         )
 
 
@@ -130,6 +140,7 @@ class Quest:
     reward_item: Optional[Item] = None
     reward_xp: int = 100
     completed: bool = False
+    environment_tree: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_completed(self) -> bool:
@@ -159,6 +170,7 @@ class Quest:
             "reward_item": self.reward_item.to_dict() if self.reward_item else None,
             "reward_xp": self.reward_xp,
             "completed": self.completed,
+            "environment_tree": dict(self.environment_tree),
         }
 
     @classmethod
@@ -181,12 +193,13 @@ class Quest:
             reward_item=reward_item,
             reward_xp=int(data.get("reward_xp", 100)),
             completed=bool(data.get("completed", False)),
+            environment_tree=dict(data.get("environment_tree", {})),
         )
 
 
 @dataclass
 class PlayerStats:
-    """Player state, health, XP progression, and inventory container."""
+    """Player state, health, XP progression, inventory, and gamification stats."""
 
     character_name: str = "Byte"
     hp: int = DEFAULT_MAX_HP
@@ -197,6 +210,12 @@ class PlayerStats:
     inventory: List[Item] = field(default_factory=list)
     current_sector: int = 0
     completed_sectors: List[int] = field(default_factory=list)
+    score: int = 0
+    streak: int = 0
+    max_streak: int = 0
+    badges: List[str] = field(default_factory=list)
+    hints_used: int = 0
+    secrets_found: List[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Ensure rank matches initial level."""
@@ -224,6 +243,7 @@ class PlayerStats:
         if amount <= 0:
             return False
         self.xp += amount
+        self.score += amount
         leveled_up = False
 
         # Threshold formula: Level N requires N * 100 cumulative or incremental XP
@@ -235,6 +255,31 @@ class PlayerStats:
             leveled_up = True
 
         return leveled_up
+
+    def add_badge(self, badge: str) -> bool:
+        """Award an achievement badge if not already unlocked."""
+        if badge not in self.badges:
+            self.badges.append(badge)
+            return True
+        return False
+
+    def increase_streak(self) -> int:
+        """Increment current solve streak and update max streak."""
+        self.streak += 1
+        if self.streak > self.max_streak:
+            self.max_streak = self.streak
+        return self.streak
+
+    def reset_streak(self) -> None:
+        """Reset current streak counter."""
+        self.streak = 0
+
+    def add_secret(self, secret_id: str) -> bool:
+        """Record an exploration secret discovery."""
+        if secret_id not in self.secrets_found:
+            self.secrets_found.append(secret_id)
+            return True
+        return False
 
     def add_item(self, item: Item) -> bool:
         """Add an item to inventory if not already present. Returns True if added."""
@@ -266,6 +311,12 @@ class PlayerStats:
             "inventory": [item.to_dict() for item in self.inventory],
             "current_sector": self.current_sector,
             "completed_sectors": list(self.completed_sectors),
+            "score": self.score,
+            "streak": self.streak,
+            "max_streak": self.max_streak,
+            "badges": list(self.badges),
+            "hints_used": self.hints_used,
+            "secrets_found": list(self.secrets_found),
         }
 
     @classmethod
@@ -285,6 +336,12 @@ class PlayerStats:
             inventory=inventory,
             current_sector=int(data.get("current_sector", 0)),
             completed_sectors=list(data.get("completed_sectors", [])),
+            score=int(data.get("score", 0)),
+            streak=int(data.get("streak", 0)),
+            max_streak=int(data.get("max_streak", 0)),
+            badges=list(data.get("badges", [])),
+            hints_used=int(data.get("hints_used", 0)),
+            secrets_found=list(data.get("secrets_found", [])),
         )
 
 

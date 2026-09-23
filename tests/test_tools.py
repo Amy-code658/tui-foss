@@ -62,7 +62,11 @@ from cybershell.tools.map import (  # noqa: E402
 # 1. Hacker Codex
 # =============================================================================
 
-REQUIRED_COMMAND_NAMES = ("ls", "cd", "cat", "grep", "chmod", "rm", "touch", "mkdir")
+REQUIRED_COMMAND_NAMES = (
+    "ls", "cd", "cat", "grep", "chmod", "rm", "touch", "mkdir",
+    "pwd", "find", "cp", "mv", "head", "tail", "wc", "echo",
+    "man", "lookup", "help", "hint", "sort", "less",
+)
 
 
 class TestCodex(unittest.TestCase):

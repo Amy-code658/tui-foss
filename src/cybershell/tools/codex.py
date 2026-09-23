@@ -35,144 +35,337 @@ REQUIRED_KEYS: Tuple[str, ...] = ("name", "description", "syntax", "flags", "exa
 COMMANDS: Dict[str, Dict[str, Any]] = {
     "ls": {
         "name": "ls",
-        "description": "List directory contents - scan a sector for loot, keys, and agents.",
+        "description": "List directory contents - see what files and folders are around.",
         "syntax": "ls [options] [path]",
         "flags": {
-            "-l": "Long format: show permissions, owner, and size (STUX scan).",
-            "-a": "Include hidden files - ghost signals often lurk in dotfiles.",
-            "-la": "Composite: long format plus hidden files.",
+            "-l": "Long format: show details like permissions and size.",
+            "-a": "Include hidden files that start with a dot.",
+            "-la": "Show all files with full details.",
         },
         "examples": [
             "ls",
             "ls -la",
-            "ls -l /var/log",
+            "ls garden",
         ],
         "combos": [
-            "ls → cd → cat   # scope the sector, move in, read the intel",
+            "ls → cd → cat   # look around, step inside, and read notes",
         ],
     },
     "cd": {
         "name": "cd",
-        "description": "Change the working directory - navigate the mainframe tree.",
+        "description": "Change directory - walk to a different folder.",
         "syntax": "cd [path]",
         "flags": {
-            "~": "Jump to the operative home node.",
-            "..": "Move one level up the directory tree.",
-            "-": "Return to the previous working directory.",
+            "~": "Jump back to your home folder.",
+            "..": "Move one level up to the parent folder.",
+            "-": "Return to the previous folder.",
         },
         "examples": [
-            "cd /tmp",
+            "cd garden",
             "cd ..",
-            "cd ~/logs",
+            "cd ~",
         ],
         "combos": [
-            "ls → cd → cat   # recon a sector, then tunnel deeper and read intel",
+            "cd garden → ls   # step into a folder and look around",
         ],
     },
     "cat": {
         "name": "cat",
-        "description": "Concatenate files to stdout - dump file contents into the terminal.",
+        "description": "Read and print file contents to your screen.",
         "syntax": "cat [file...]",
         "flags": {
-            "-n": "Number all output lines (indexed intel).",
-            "-A": "Show all characters including invisible control glyphs.",
+            "-n": "Number all output lines.",
         },
         "examples": [
-            "cat mission_brief.txt",
-            "cat -n logs.txt",
+            "cat welcome.txt",
+            "cat notes.txt",
         ],
         "combos": [
-            "cat /var/log/auth.log → grep 'Failed'   # surface failed entry attempts",
+            "cat animals.txt | grep 'cat'   # read and filter text",
+        ],
+    },
+    "less": {
+        "name": "less",
+        "description": "View file contents comfortably.",
+        "syntax": "less [file...]",
+        "flags": {},
+        "examples": [
+            "less welcome.txt",
+            "less notes.txt",
+        ],
+        "combos": [
+            "less story.txt   # read long notes",
         ],
     },
     "grep": {
         "name": "grep",
-        "description": "Search text for patterns - filter a stream for the intel that matters.",
+        "description": "Search text for words or patterns.",
         "syntax": "grep [options] PATTERN [file...]",
         "flags": {
-            "-i": "Case-insensitive match - ignore case while hunting.",
-            "-r": "Recursive search through directories.",
+            "-i": "Case-insensitive: ignore uppercase vs lowercase.",
+            "-r": "Search through all folders recursively.",
             "-n": "Show line numbers of matches.",
-            "-c": "Count matching lines instead of printing them.",
+            "-v": "Invert match: show lines that do NOT match.",
         },
         "examples": [
-            "grep 'password' logs.txt",
-            "grep -r 'ACCESS' /etc",
-            "grep -c 'ERROR' app.log",
+            "grep 'banana' items.txt",
+            "grep -i 'hello' notes.txt",
+            "grep 'password' notes.txt",
         ],
         "combos": [
-            "find → grep → cat   # locate the file, filter it, then read the prize",
-            "cat logs.txt | grep 'denied'",
+            "find . -name '*.txt' | grep 'clue'   # find and filter",
         ],
     },
     "chmod": {
         "name": "chmod",
-        "description": "Change file permission bits - reforge access codes on secured nodes.",
+        "description": "Change permissions on a file or script.",
         "syntax": "chmod [mode] [file]",
         "flags": {
-            "755": "rwxr-xr-x: owner full access, group/others read+execute.",
-            "644": "rw-r--r--: owner read/write, group/others read-only.",
-            "600": "rw-------: private file, owner-only access.",
-            "700": "rwx------: private executable, owner-only access.",
+            "755": "Owner can read, write, run; everyone else can read and run.",
+            "644": "Owner can read and write; everyone else can read only.",
+            "+x": "Make a script executable so you can run it.",
         },
         "examples": [
-            "chmod 755 script.sh",
-            "chmod 600 credentials.key",
-            "chmod -R 700 /secure",
+            "chmod 755 play.sh",
+            "chmod +x script.sh",
+            "chmod 644 notes.txt",
         ],
         "combos": [
-            "chmod 755 script.sh → ./script.sh   # arm and fire a payload",
-            "chmod 600 secrets.txt → cat secrets.txt",
+            "chmod 755 play.sh → ./play.sh   # make executable and run",
         ],
     },
     "rm": {
         "name": "rm",
-        "description": "Remove files or directories - purge evidence and cleanup trails.",
+        "description": "Remove unwanted files or folders.",
         "syntax": "rm [options] [target...]",
         "flags": {
-            "-r": "Recursive removal of a directory tree.",
-            "-f": "Force removal, ignore missing operands.",
-            "-i": "Prompt before every removal - a cautious touch.",
+            "-r": "Remove a folder and all its contents recursively.",
+            "-f": "Force remove without asking.",
         },
         "examples": [
-            "rm temp.log",
-            "rm -r old_sector_data",
-            "rm -f crash_dumps/*.dmp",
+            "rm junk.tmp",
+            "rm -r old_folder",
         ],
         "combos": [
-            "rm -r /var/log → shutdown   # scrub the node before you ghost out",
+            "rm junk.tmp   # clean up temporary files",
         ],
     },
     "touch": {
         "name": "touch",
-        "description": "Create an empty file or stamp a timestamp - spawn a fresh node.",
+        "description": "Create a new empty file or update its timestamp.",
         "syntax": "touch [file]",
-        "flags": {
-            "-a": "Update the access time only.",
-            "-m": "Update the modification time only.",
-        },
+        "flags": {},
         "examples": [
-            "touch payload.sh",
-            "touch /tmp/beacon.txt",
+            "touch todo.txt",
+            "touch notes.txt",
         ],
         "combos": [
-            "touch key.txt → echo 'CYBER_KEY' > key.txt   # fabricate a marker, then fill it",
+            "touch todo.txt → echo 'Learn Linux' > todo.txt   # create and write",
+        ],
+    },
+    "sort": {
+        "name": "sort",
+        "description": "Sort lines in text files alphabetically or numerically.",
+        "syntax": "sort [options] [file...]",
+        "flags": {
+            "-r": "Reverse the sort order (Z to A).",
+            "-n": "Sort by number value.",
+            "-u": "Remove duplicate lines.",
+        },
+        "examples": [
+            "sort names.txt",
+            "sort -r scores.txt",
+        ],
+        "combos": [
+            "cat names.txt | sort   # sort list of names",
         ],
     },
     "mkdir": {
         "name": "mkdir",
-        "description": "Create directories - establish new sectors in the tree.",
+        "description": "Create a new directory folder.",
         "syntax": "mkdir [options] [dir]",
         "flags": {
-            "-p": "Create parent directories as required (no error if existing).",
-            "-v": "Verbose output for each directory crafted.",
+            "-p": "Create parent folders if needed without errors.",
         },
         "examples": [
-            "mkdir drops",
-            "mkdir -p /tmp/vault/keys",
+            "mkdir garden",
+            "mkdir -p projects/notes",
         ],
         "combos": [
-            "mkdir -p /tmp/ops → cd /tmp/ops → touch log.txt   # stage an operation node",
+            "mkdir garden → cd garden   # make a folder and enter it",
+        ],
+    },
+    "pwd": {
+        "name": "pwd",
+        "description": "Print working directory - shows where you are in the computer.",
+        "syntax": "pwd",
+        "flags": {},
+        "examples": [
+            "pwd",
+        ],
+        "combos": [
+            "pwd → ls   # check where you are and what is nearby",
+        ],
+    },
+    "find": {
+        "name": "find",
+        "description": "Search for files and directories in a directory hierarchy.",
+        "syntax": "find [path] [expression]",
+        "flags": {
+            "-name": "Match files by name pattern (e.g. -name '*.txt')",
+            "-type": "Filter by type: 'f' for file, 'd' for directory",
+        },
+        "examples": [
+            "find . -name '*.txt'",
+            "find /home -type f",
+        ],
+        "combos": [
+            "find . -name '*.log' → cat   # locate files, then inspect them",
+        ],
+    },
+    "cp": {
+        "name": "cp",
+        "description": "Copy files or directories to a new destination.",
+        "syntax": "cp [options] <source> <dest>",
+        "flags": {
+            "-r": "Copy directories recursively",
+        },
+        "examples": [
+            "cp intel.txt intel.bak",
+            "cp -r /source /dest",
+        ],
+        "combos": [
+            "cp file.txt backup/   # create a safe duplicate before modifying",
+        ],
+    },
+    "mv": {
+        "name": "mv",
+        "description": "Move or rename files and directories.",
+        "syntax": "mv <source> <dest>",
+        "flags": {},
+        "examples": [
+            "mv old.txt new.txt",
+            "mv file.txt /tmp/",
+        ],
+        "combos": [
+            "mv data.log archive/   # relocate files",
+        ],
+    },
+    "head": {
+        "name": "head",
+        "description": "Output the first part of files or streams.",
+        "syntax": "head [-n count] [file...]",
+        "flags": {
+            "-n": "Number of lines to show (default: 10)",
+        },
+        "examples": [
+            "head data.log",
+            "head -n 5 traffic.txt",
+        ],
+        "combos": [
+            "cat log.txt | head -n 10",
+        ],
+    },
+    "tail": {
+        "name": "tail",
+        "description": "Output the last part of files or streams.",
+        "syntax": "tail [-n count] [file...]",
+        "flags": {
+            "-n": "Number of lines to show (default: 10)",
+        },
+        "examples": [
+            "tail system.log",
+            "tail -n 20 events.log",
+        ],
+        "combos": [
+            "cat stream.log | tail -n 5",
+        ],
+    },
+    "wc": {
+        "name": "wc",
+        "description": "Print newline, word, and byte counts for files or streams.",
+        "syntax": "wc [-l] [file...]",
+        "flags": {
+            "-l": "Count lines only",
+            "-w": "Count words only",
+            "-c": "Count bytes only",
+        },
+        "examples": [
+            "wc -l file.txt",
+            "cat access.log | wc -l",
+        ],
+        "combos": [
+            "cat log | grep 'ERROR' | wc -l   # count occurrences",
+        ],
+    },
+    "echo": {
+        "name": "echo",
+        "description": "Print a line of text or write into a file with > or >>.",
+        "syntax": "echo [text] [> file]",
+        "flags": {
+            "-n": "Do not output trailing newline",
+            ">": "Redirect output to create or overwrite a file",
+            ">>": "Redirect output to append to a file without overwriting",
+        },
+        "examples": [
+            "echo 'Hello Linux!'",
+            "echo 'Hello Linux' > greeting.txt",
+            "echo 'Have fun!' >> greeting.txt",
+        ],
+        "combos": [
+            "echo 'Note' > notes.txt   # write a quick note to a file",
+        ],
+    },
+    "man": {
+        "name": "man",
+        "description": "Display concise, beginner-friendly manual page for a command.",
+        "syntax": "man <command>",
+        "flags": {},
+        "examples": [
+            "man ls",
+            "man grep",
+            "man find",
+        ],
+        "combos": [
+            "man grep   # learn pattern search flags and examples",
+        ],
+    },
+    "lookup": {
+        "name": "lookup",
+        "description": "Quick lookup of command syntax, flags, and examples (alias for man).",
+        "syntax": "lookup <command>",
+        "flags": {},
+        "examples": [
+            "lookup chmod",
+            "lookup grep",
+        ],
+        "combos": [
+            "lookup find   # quick help on finding files",
+        ],
+    },
+    "help": {
+        "name": "help",
+        "description": "Display overview of available commands and gameplay controls.",
+        "syntax": "help [command]",
+        "flags": {},
+        "examples": [
+            "help",
+            "help cd",
+        ],
+        "combos": [
+            "help   # check available tools",
+        ],
+    },
+    "hint": {
+        "name": "hint",
+        "description": "Request progressive assistance for the current objective (Concept -> Category -> Direction).",
+        "syntax": "hint",
+        "flags": {},
+        "examples": [
+            "hint",
+        ],
+        "combos": [
+            "hint   # view progressive clue without HP penalty",
         ],
     },
 }
@@ -293,7 +486,7 @@ class Codex:
         marker = "=" * max(10, width)
         lines = [
             marker,
-            f"[ HACKER CODEX // {entry['name']} ]",
+            f"[ COMMAND GUIDE // {entry['name']} ]",
             marker,
             f"Syntax: {entry['syntax']}",
             f"Summary: {entry['description']}",
@@ -309,17 +502,53 @@ class Codex:
             lines.extend(f"  > {example}" for example in entry["examples"])
             lines.append("")
         if entry["combos"]:
-            lines.append("Tactical combos:")
+            lines.append("Helpful combos:")
             lines.extend(f"  » {combo}" for combo in entry["combos"])
         return "\n".join(lines)
 
     def display_list(self) -> str:
         """Render a compact overview of every registered command."""
-        lines = ["[ HACKER CODEX // SPELLBOOK OVERVIEW ]"]
+        lines = ["[ COMMAND GUIDE // HANDBOOK OVERVIEW ]"]
         for entry in self.list_commands():
             lines.append(f"  {entry['name']:<10} {entry['description']}")
         lines.append("")
-        lines.append("Type a command name to decrypt its full entry.")
+    def format_man_page(self, name: str) -> str:
+        """Format a clean, concise, beginner-friendly manual page."""
+        clean_name = str(name).strip().lower()
+        entry = self.get_command(clean_name)
+        if not entry:
+            matches = self.search_commands(clean_name)
+            if matches:
+                suggestions = ", ".join(f"'{m['name']}'" for m in matches[:3])
+                return f"No manual entry for '{name}'. Did you mean: {suggestions}?\nType 'help' to see all available commands.\n"
+            return f"No manual entry for '{name}'. Type 'help' for available commands.\n"
+
+        lines = [
+            "NAME",
+            f"    {entry['name']} - {entry['description']}",
+            "",
+            "SYNOPSIS",
+            f"    {entry['syntax']}",
+            "",
+            "DESCRIPTION",
+            f"    {entry['description']}",
+        ]
+        if entry.get("flags"):
+            lines.append("")
+            lines.append("OPTIONS & FLAGS")
+            for flag, desc in entry["flags"].items():
+                lines.append(f"    {flag:<12} {desc}")
+        if entry.get("examples"):
+            lines.append("")
+            lines.append("EXAMPLES")
+            for ex in entry["examples"]:
+                lines.append(f"    $ {ex}")
+        if entry.get("combos"):
+            lines.append("")
+            lines.append("TACTICAL COMBOS")
+            for combo in entry["combos"]:
+                lines.append(f"    » {combo}")
+        lines.append("")
         return "\n".join(lines)
 
 
@@ -374,6 +603,11 @@ def display_list() -> str:
     return CODEX.display_list()
 
 
+def format_man_page(name: str) -> str:
+    """Render a concise beginner-friendly manual page from the default codex."""
+    return CODEX.format_man_page(name)
+
+
 __all__ = [
     "COMMANDS",
     "REQUIRED_KEYS",
@@ -388,4 +622,5 @@ __all__ = [
     "get_examples",
     "display_command",
     "display_list",
+    "format_man_page",
 ]

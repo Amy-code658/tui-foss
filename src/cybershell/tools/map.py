@@ -442,6 +442,48 @@ def default_mainframe_map() -> MainframeMap:
     return network
 
 
+def render_adventure_map(
+    player: PlayerStats,
+    quests: Optional[Dict[int, Any]] = None,
+    width: int = 60,
+) -> str:
+    """Render the friendly 15-level adventure progression map."""
+    if quests is None:
+        try:
+            from cybershell.game.quests import get_sector_quests
+            quests = get_sector_quests()
+        except Exception:
+            quests = {}
+
+    lines = [
+        "🌱 YOUR ADVENTURE (15 LEVELS)",
+        "",
+    ]
+    completed = set(player.completed_sectors) if hasattr(player, "completed_sectors") else set()
+    current = getattr(player, "current_sector", 0)
+
+    for sid in range(15):
+        q = quests.get(sid)
+        title = q.sector_name if q else f"Level {sid + 1}"
+        lvl_num = f"{sid + 1:02d}"
+        if sid in completed:
+            mark = "\033[92m✓\033[0m"
+            state_str = f"\033[92m{lvl_num}  {title:<24} (Completed)\033[0m"
+        elif sid == current:
+            mark = "\033[93m●\033[0m"
+            state_str = f"\033[1;93m{lvl_num}  {title:<24} (Current)\033[0m"
+        else:
+            mark = "\033[2m○\033[0m"
+            state_str = f"\033[2m{lvl_num}  {title:<24}\033[0m"
+        lines.append(f"  {mark} {state_str}")
+
+    lines.append("")
+    total_completed = len(completed)
+    pct = int((total_completed / 15) * 100)
+    lines.append(f"Progress: {total_completed}/15 levels completed ({pct}%) ⭐")
+    return "\n".join(lines)
+
+
 __all__ = [
     "ACTIVE",
     "LIBERATED",
@@ -451,4 +493,5 @@ __all__ = [
     "MapError",
     "MainframeMap",
     "default_mainframe_map",
+    "render_adventure_map",
 ]

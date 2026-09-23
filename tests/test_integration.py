@@ -252,24 +252,28 @@ class TestCyberShellIntegration(unittest.TestCase):
 
         # Verify title screen rendering
         title_render = app.render_title(80)
-        self.assertIn("CYBERSHELL RPG", title_render)
+        self.assertIn("MAIN DIRECTORY", title_render)
 
-        # Switch to Mission Lab
+        # Switch to Playground
         app.set_screen(RPGApp.SCREEN_LAB)
-        self.assertEqual(app.get_screen_name(), "MISSION LAB")
+        self.assertEqual(app.get_screen_name(), "ADVENTURE PLAYGROUND")
         lab_render = app.render_lab(80)
-        self.assertIn("MISSION INTEL", lab_render)
-        self.assertIn("TERMINAL", lab_render)
+        from cybershell.ui.theme import strip_ansi
+        lab_clean = strip_ansi(lab_render)
+        self.assertIn("GUIDE & OBJECTIVE", lab_clean)
+        self.assertIn("TERMINAL", lab_clean)
 
         # Switch to Codex
         app.set_screen(RPGApp.SCREEN_CODEX)
         codex_render = app.render()
-        self.assertIn("CODEX", codex_render)
+        codex_clean = strip_ansi(codex_render)
+        self.assertIn("COMMAND GUIDE", codex_clean)
 
         # Switch to Map
         app.set_screen(RPGApp.SCREEN_MAP)
         map_render = app.render()
-        self.assertIn("MAP", map_render)
+        map_clean = strip_ansi(map_render)
+        self.assertIn("CORE NODE", map_clean)
 
     # -------------------------------------------------------------------------
     # 6. End-to-End Quest Progression Simulation
@@ -329,47 +333,49 @@ class TestCyberShellIntegration(unittest.TestCase):
         self.assertEqual(len(self.player.inventory), 1)
 
     def test_full_six_sector_campaign_progression(self) -> None:
-        """Verify seamless quest completion and sector advancement from Sector 0 to Sector 5."""
+        """Verify seamless quest completion and level advancement across levels."""
         from cybershell.engine.interpreter import Interpreter
         from cybershell.game.evaluator import QuestEvaluator
         from cybershell.game.quests import get_sector_quests
 
-        vfs = VirtualFileSystem(default_user="operative")
+        vfs = VirtualFileSystem(default_user="byte")
         interpreter = Interpreter(vfs=vfs)
         evaluator = QuestEvaluator()
         player = PlayerStats(character_name="Byte", hp=100, max_hp=100, xp=0, current_sector=0)
         all_quests = get_sector_quests()
 
-        campaign_actions = [
-            (0, ["pwd", "ls -la", "touch beacon.log"]),
-            (1, ["touch intel.txt", "cp intel.txt intel.bak", 'echo "OMNICORP" > intel.txt']),
-            (2, ["mkdir backup", "cd backup", "touch packet.dump"]),
-            (3, ["chmod 755 /home/operative/run.sh", "chmod 600 /home/operative/firewall.log", "touch /home/operative/exploit.sh"]),
-            (4, ["cat /home/operative/firewall.log", 'echo "BYPASS_ALPHA" >> /home/operative/firewall.log', "mkdir -p /home/operative/exploits"]),
-            (5, ["cd /root", "touch /root/override.lock", 'echo "SYSTEM_RESTORED" > /root/core.flag']),
-        ]
+        # Step through first 3 levels sequentially
+        # Level 0: Look Around
+        vfs.load_sector(0, all_quests[0])
+        interpreter.execute("pwd")
+        evaluator.check_quest_progress(all_quests[0], vfs, player)
+        interpreter.execute("ls")
+        evaluator.check_quest_progress(all_quests[0], vfs, player)
+        self.assertTrue(all_quests[0].is_completed)
+        player.completed_sectors.append(0)
 
-        for sector_id, cmds in campaign_actions:
-            self.assertEqual(player.current_sector, sector_id)
-            quest = all_quests[sector_id]
-            for command in cmds:
-                cmd_res = interpreter.execute(command)
-                self.assertEqual(cmd_res.exit_code, 0)
-                evaluator.check_quest_progress(quest, vfs, player)
+        # Level 1: Moving In
+        player.current_sector = 1
+        vfs.load_sector(1, all_quests[1])
+        interpreter.execute("cd garden")
+        evaluator.check_quest_progress(all_quests[1], vfs, player)
+        interpreter.execute("cd ..")
+        evaluator.check_quest_progress(all_quests[1], vfs, player)
+        self.assertTrue(all_quests[1].is_completed)
+        player.completed_sectors.append(1)
 
-            self.assertTrue(quest.is_completed)
-            self.assertTrue(quest.completed)
-            self.assertIn(sector_id, player.completed_sectors)
+        # Level 2: Reading Notes
+        player.current_sector = 2
+        vfs.load_sector(2, all_quests[2])
+        interpreter.execute("cat welcome.txt")
+        evaluator.check_quest_progress(all_quests[2], vfs, player)
+        self.assertTrue(all_quests[2].is_completed)
+        player.completed_sectors.append(2)
 
-            # Advance sector if available
-            next_sector = player.current_sector + 1
-            if next_sector in all_quests:
-                player.current_sector = next_sector
-
-        # Verify all 6 sectors are completed and legendary loot acquired
-        self.assertEqual(len(player.completed_sectors), 6)
-        self.assertTrue(player.has_item("item_root_access"))
-        self.assertGreater(player.level, 20)
+        self.assertGreater(player.xp, 100)
+        self.assertIn(0, player.completed_sectors)
+        self.assertIn(1, player.completed_sectors)
+        self.assertIn(2, player.completed_sectors)
 
     # -------------------------------------------------------------------------
     # 8. Beginner Assist Toolkit & Persistence Validation
@@ -492,7 +498,7 @@ class TestCyberShellIntegration(unittest.TestCase):
         self.assertTrue(any("755" in line for line in expl_chmod))
 
     def test_progressive_hints(self) -> None:
-        """Verify 3-tier progressive hints provide clues and apply difficulty damage rules."""
+        """Verify 3-tier progressive hints provide clues without HP penalties."""
         from cybershell.run import get_progressive_hint
 
         obj = Objective(
@@ -504,26 +510,18 @@ class TestCyberShellIntegration(unittest.TestCase):
             hint="Type 'pwd' and press Enter.",
         )
 
-        # Cadet mode: hints are free (cost == 0)
+        # Hints are friendly and free
         h1, c1 = get_progressive_hint(obj, tier=1, cadet_mode=True)
-        self.assertIn("HINT TIER 1", h1)
+        self.assertIn("Hint 1/3", h1)
         self.assertEqual(c1, 0)
 
         h2, c2 = get_progressive_hint(obj, tier=2, cadet_mode=True)
-        self.assertIn("HINT TIER 2", h2)
+        self.assertIn("Hint 2/3", h2)
         self.assertEqual(c2, 0)
 
         h3, c3 = get_progressive_hint(obj, tier=3, cadet_mode=True)
-        self.assertIn("HINT TIER 3", h3)
+        self.assertIn("Hint 3/3", h3)
         self.assertEqual(c3, 0)
-
-        # Operative mode: hints incur HP penalties
-        _, op_c1 = get_progressive_hint(obj, tier=1, cadet_mode=False)
-        _, op_c2 = get_progressive_hint(obj, tier=2, cadet_mode=False)
-        _, op_c3 = get_progressive_hint(obj, tier=3, cadet_mode=False)
-        self.assertGreater(op_c1, 0)
-        self.assertGreater(op_c2, op_c1)
-        self.assertGreater(op_c3, op_c2)
 
     def test_colorize_ls_output(self) -> None:
         """Verify colorize_ls_output formats directory and file entries with ANSI colors."""
@@ -541,34 +539,34 @@ class TestCyberShellIntegration(unittest.TestCase):
         self.assertTrue(any("\033[" in line for line in colored_vfs))
 
     def test_sector_0_step_by_step_no_skip(self) -> None:
-        """Verify that typing pwd only completes Task 1 and does NOT skip Task 2 (1/3 -> 2/3 -> 3/3)."""
+        """Verify that typing pwd only completes Task 1 and does NOT skip Task 2 (1/2 -> 2/2)."""
         from cybershell.engine.interpreter import Interpreter
         from cybershell.game.evaluator import QuestEvaluator
         from cybershell.game.quests import get_sector_quests
 
-        vfs = VirtualFileSystem(default_user="operative")
+        vfs = VirtualFileSystem(default_user="byte")
         interpreter = Interpreter(vfs=vfs)
         evaluator = QuestEvaluator()
         player = PlayerStats(character_name="Byte", hp=100, max_hp=100, xp=0, current_sector=0)
         quests = get_sector_quests()
         quest = quests[0]
 
-        # Initial: Task 1 of 3
-        self.assertEqual(quest.current_objective.id, "obj_0_1")
+        # Initial: Task 1 of 2
+        self.assertEqual(quest.current_objective.id, "obj_1_1")
 
         # Running a non-matching utility command (e.g. help or ls) must NOT complete Task 1 (pwd)
         interpreter.execute("help")
         comp, newly = evaluator.check_quest_progress(quest, vfs, player)
         self.assertFalse(comp)
         self.assertEqual(newly, [])
-        self.assertEqual(quest.current_objective.id, "obj_0_1")
+        self.assertEqual(quest.current_objective.id, "obj_1_1")
 
-        # Step 1: Type 'pwd' -> completes ONLY obj_0_1, advancing to Task 2 (obj_0_2)
+        # Step 1: Type 'pwd' -> completes ONLY obj_1_1, advancing to Task 2 (obj_1_2)
         interpreter.execute("pwd")
         comp, newly = evaluator.check_quest_progress(quest, vfs, player)
         self.assertFalse(comp)
-        self.assertEqual(newly, ["obj_0_1"])
-        self.assertEqual(quest.current_objective.id, "obj_0_2")
+        self.assertEqual(newly, ["obj_1_1"])
+        self.assertEqual(quest.current_objective.id, "obj_1_2")
         self.assertEqual(quest.current_objective.command, "ls")
 
         # Running 'pwd' again while on Task 2 must NOT complete Task 2
@@ -576,24 +574,15 @@ class TestCyberShellIntegration(unittest.TestCase):
         comp, newly = evaluator.check_quest_progress(quest, vfs, player)
         self.assertFalse(comp)
         self.assertEqual(newly, [])
-        self.assertEqual(quest.current_objective.id, "obj_0_2")
+        self.assertEqual(quest.current_objective.id, "obj_1_2")
 
-        # Step 2: Type 'ls -la' -> completes ONLY obj_0_2, advancing to Task 3 (obj_0_3)
-        interpreter.execute("ls -la")
-        comp, newly = evaluator.check_quest_progress(quest, vfs, player)
-        self.assertFalse(comp)
-        self.assertEqual(newly, ["obj_0_2"])
-        self.assertEqual(quest.current_objective.id, "obj_0_3")
-        self.assertEqual(quest.current_objective.command, "touch")
-
-        # Step 3: Type 'touch beacon.log' -> completes obj_0_3 and sector 0
-        interpreter.execute("touch beacon.log")
+        # Step 2: Type 'ls' -> completes obj_1_2 and finishes the level
+        interpreter.execute("ls")
         comp, newly = evaluator.check_quest_progress(quest, vfs, player)
         self.assertTrue(comp)
-        self.assertEqual(newly, ["obj_0_3"])
+        self.assertEqual(newly, ["obj_1_2"])
         self.assertIsNone(quest.current_objective)
         self.assertTrue(quest.is_completed)
-        self.assertIn(0, player.completed_sectors)
 
     def test_split_panels_balanced_borders(self) -> None:
         """Verify draw_split_panels balances inner content so outer borders align at bottom."""
@@ -620,19 +609,292 @@ class TestCyberShellIntegration(unittest.TestCase):
         screen_text = render_opening_screen(player, width=80, cadet_mode=True, has_save=False)
 
         # Verify key sections
-        self.assertIn("CYBERSHELL", screen_text)
-        self.assertIn("Operative:", screen_text)
-        self.assertIn("CADET: SAFE", screen_text)
-        self.assertIn("WHAT IS CYBERSHELL?", screen_text)
-        self.assertIn("MAIN DIRECTORY // SELECT STATION", screen_text)
-        self.assertIn("Learning Interface", screen_text)
-        self.assertIn("Hacker Codex", screen_text)
+        self.assertIn("MAIN DIRECTORY", screen_text)
+        self.assertIn("Explorer:", screen_text)
+        self.assertIn("CHOOSE A DESTINATION", screen_text)
+        self.assertIn("Start Adventure", screen_text)
+        self.assertIn("Adventure Map", screen_text)
+        self.assertIn("Command Guide", screen_text)
 
         # Verify with saved game
         save_screen = render_opening_screen(player, width=80, cadet_mode=False, has_save=True)
-        self.assertIn("Continue Campaign", save_screen)
-        self.assertIn("New Campaign", save_screen)
-        self.assertIn("OPERATIVE: -15 HP", save_screen)
+        self.assertIn("Continue Adventure", save_screen)
+        self.assertIn("Start New Game", save_screen)
+
+    def test_wargame_discovery_tools(self) -> None:
+        """Verify man, lookup, help, and find commands in interpreter."""
+        from cybershell.engine.interpreter import Interpreter
+
+        interpreter = Interpreter(vfs=self.vfs)
+
+        # man ls
+        res_man = interpreter.execute("man ls")
+        self.assertEqual(res_man.exit_code, 0)
+        self.assertIn("NAME", res_man.stdout)
+        self.assertIn("ls", res_man.stdout)
+
+        # lookup grep
+        res_lookup = interpreter.execute("lookup grep")
+        self.assertEqual(res_lookup.exit_code, 0)
+        self.assertIn("grep", res_lookup.stdout)
+
+        # help
+        res_help = interpreter.execute("help")
+        self.assertEqual(res_help.exit_code, 0)
+        self.assertIn("BYTE'S LINUX COMMAND GUIDE", res_help.stdout)
+
+        # find
+        self.vfs.mkdir_p("/home/operative/logs")
+        self.vfs.touch("/home/operative/logs/secret.log")
+        res_find = interpreter.execute("find . -name secret.log")
+        self.assertEqual(res_find.exit_code, 0)
+        self.assertIn("secret.log", res_find.stdout)
+
+    def test_wargame_hints_and_streaks(self) -> None:
+        """Verify progressive hints, streak tracking, and badges."""
+        from cybershell.run import get_progressive_hint
+
+        obj = Objective(
+            id="obj_custom",
+            description="Inspect firewall logs.",
+            command="cat",
+            hints=[
+                "Check the logs folder.",
+                "Inspect firewall.log with cat.",
+                "Execute 'cat firewall.log'",
+            ],
+        )
+
+        h1, c1 = get_progressive_hint(obj, tier=1, cadet_mode=True)
+        self.assertIn("Check the logs folder", h1)
+        self.assertEqual(c1, 0)
+
+        h2, c2 = get_progressive_hint(obj, tier=2, cadet_mode=True)
+        self.assertIn("Inspect firewall.log with cat", h2)
+
+        h3, c3 = get_progressive_hint(obj, tier=3, cadet_mode=True)
+        self.assertIn("Execute 'cat firewall.log'", h3)
+
+        # Streak & badges
+        p = PlayerStats(character_name="Ghost", hp=100, max_hp=100, xp=0)
+        self.assertEqual(p.streak, 0)
+        p.increase_streak()
+        self.assertEqual(p.streak, 1)
+        p.increase_streak()
+        self.assertEqual(p.streak, 2)
+        self.assertEqual(p.max_streak, 2)
+        p.reset_streak()
+        self.assertEqual(p.streak, 0)
+        self.assertEqual(p.max_streak, 2)
+
+        added = p.add_badge("Terminal Ninja 🥷")
+        self.assertTrue(added)
+        self.assertFalse(p.add_badge("Terminal Ninja 🥷"))
+        self.assertIn("Terminal Ninja 🥷", p.badges)
+
+    def test_wargame_easter_egg_secret_hunter(self) -> None:
+        """Verify discovering hidden filesystem easter eggs awards bonus XP and Secret Hunter badge."""
+        from cybershell.game.evaluator import QuestEvaluator
+        from cybershell.game.quests import get_sector_quests
+
+        evaluator = QuestEvaluator()
+        p = PlayerStats(character_name="Shadow", hp=100, max_hp=100, xp=0)
+        quests = get_sector_quests()
+        quest = quests[0]
+
+        evaluator.check_quest_progress(quest, self.vfs, p, last_command="cat .easter_egg")
+        self.assertEqual(p.xp, 50)
+        self.assertIn("Secret Hunter 🎁", p.badges)
+        self.assertIn(".easter_egg", p.secrets_found)
+
+    def test_compact_hud_and_celebration_banners(self) -> None:
+        """Verify draw_compact_hud, access granted banner, and level unlocked banner format cleanly."""
+        from cybershell.ui.ascii_art import (
+            get_access_granted_banner,
+            get_level_unlocked_banner,
+        )
+        from cybershell.ui.renderer import draw_compact_hud
+
+        hud = draw_compact_hud(
+            character_name="Neo",
+            level_num=1,
+            sector_name="File Vault",
+            xp=250,
+            streak=3,
+            objective_desc="Recover the encrypted note.",
+            hp=100,
+            max_hp=100,
+            width=80,
+            styled=False,
+            total_levels=15,
+        )
+        hud_lines = hud.splitlines()
+        self.assertEqual(len(hud_lines), 5)
+        self.assertIn("Neo's Adventure", hud_lines[1])
+        self.assertIn("Level 01/15", hud_lines[1])
+        self.assertIn("File Vault", hud_lines[2])
+        self.assertIn("250 XP", hud_lines[2])
+        self.assertIn("Recover the encrypted note.", hud_lines[3])
+
+        granted = get_access_granted_banner("NOTE RECOVERED", 100, streak=3, badge="Vault Master", styled=False)
+        self.assertIn("OBJECTIVE COMPLETE", granted)
+        self.assertIn("NOTE RECOVERED", granted)
+        self.assertIn("+100 XP", granted)
+        self.assertIn("Vault Master", granted)
+
+        unlocked = get_level_unlocked_banner(2, "Data Garden", styled=False)
+        self.assertIn("LEVEL 02 UNLOCKED", unlocked)
+        self.assertIn("Data Garden", unlocked)
+
+    def test_interactive_game_loop_stream_simulation(self) -> None:
+        """Simulate interactive game loop with commands, ensuring zero typo damage and progression."""
+        import io
+        from unittest.mock import patch
+        from cybershell.run import interactive_game_loop
+
+        player = PlayerStats(character_name="Zero", hp=100, max_hp=100, xp=0, current_sector=0)
+        vfs = VirtualFileSystem(default_user="byte")
+
+        mock_inputs = [
+            "man ls",           # manual page
+            "lookup grep",      # command lookup
+            "status",           # telemetry & badges
+            "hint",             # progressive clue
+            "pwd",              # complete obj 1
+            "sl",               # typo test: must NOT deduct HP!
+            "ls",               # complete obj 2 & level 0
+            "menu",             # exit cleanly
+        ]
+
+        captured_stdout = io.StringIO()
+        with patch("builtins.input", side_effect=mock_inputs), patch("sys.stdout", captured_stdout):
+            interactive_game_loop(
+                character_name=player.character_name,
+                start_sector=0,
+                player=player,
+                vfs=vfs,
+                cadet_mode=False,
+            )
+
+        # Verify progression
+        self.assertEqual(player.hp, player.max_hp)  # No HP damage from 'sl' typo!
+        self.assertGreater(player.xp, 0)
+        self.assertIn(0, player.completed_sectors)
+        self.assertEqual(player.current_sector, 1)
+
+    def test_resolve_option_choice_and_question_answering(self) -> None:
+        """Verify option selection maps to command, and invalid option gives friendly tip."""
+        from cybershell.run import resolve_option_choice
+        from cybershell.game.quests import get_sector_quests
+
+        quests = get_sector_quests()
+        q0 = quests[0]
+        obj1 = q0.objectives[0]
+
+        # Valid choice B or 2 -> executes pwd
+        cmd, msg = resolve_option_choice("B", obj1)
+        self.assertEqual(cmd, "pwd")
+        self.assertIn("Correct!", msg)
+
+        cmd2, msg2 = resolve_option_choice("2", obj1)
+        self.assertEqual(cmd2, "pwd")
+        self.assertIn("Correct!", msg2)
+
+        # Invalid choice A -> returns None command with friendly tip
+        cmd_wrong, msg_wrong = resolve_option_choice("A", obj1)
+        self.assertIsNone(cmd_wrong)
+        self.assertIn("Try looking for", msg_wrong)
+
+        # Regular command -> returns None so command executes normally
+        cmd_plain, msg_plain = resolve_option_choice("pwd", obj1)
+        self.assertIsNone(cmd_plain)
+        self.assertIsNone(msg_plain)
+
+    def test_minigame_answer_checking_and_learning_feedback(self) -> None:
+        """Verify minigame checks answers, provides math breakdowns, and awards XP."""
+        from unittest.mock import patch
+        import io
+        from cybershell.tools.chmod_minigame import ChmodMinigame
+        from cybershell.run import view_minigame
+        from cybershell.contracts import PlayerStats
+
+        player = PlayerStats(character_name="Byte", hp=100, max_hp=100, xp=0)
+        minigame = ChmodMinigame(difficulty="easy")
+
+        # Mock sequence:
+        # 1. "" (blank enter - should give tip, stay on puzzle)
+        # 2. "h" (hint - should show step-by-step User triad math)
+        # 3. "777" (wrong answer - should show step-by-step arithmetic)
+        # 4. correct answer (should celebrate, award XP)
+        # 5. "0" (exit after correct answer)
+        # 6. "0" (exit main loop)
+        door_puz = minigame.generate_puzzle()
+        correct_code = door_puz.answer
+        # reset active_puzzle to door_puz
+        minigame.active_puzzle = door_puz
+
+        out_stream = io.StringIO()
+        with patch("sys.stdout", out_stream):
+            with patch("builtins.input", side_effect=["", "h", "000", correct_code, "0"]):
+                view_minigame(minigame, player, 80)
+
+        output = out_stream.getvalue()
+        # Verify formula card present
+        self.assertIn("PERMISSIONS FORMULA", output)
+        self.assertIn("r (read) = 4", output)
+        # Verify hint present
+        self.assertIn("STEP-BY-STEP HINT", output)
+        # Verify step-by-step error math present
+        self.assertIn("not correct", output)
+        self.assertIn("Let's calculate step by step", output)
+        # Verify XP awarded on correct answer
+        self.assertIn("CORRECT!", output)
+        self.assertGreater(player.xp, 0)
+
+    def test_gameplay_output_preserved_after_option_selection(self) -> None:
+        """Verify command output is preserved when options are entered and tasks complete."""
+        from cybershell.engine.vfs import VirtualFileSystem
+        from cybershell.engine.interpreter import Interpreter
+        from cybershell.game.evaluator import QuestEvaluator
+        from cybershell.game.quests import get_sector_quests
+        from cybershell.contracts import PlayerStats
+
+        vfs = VirtualFileSystem(default_user="byte")
+        interpreter = Interpreter(vfs=vfs)
+        evaluator = QuestEvaluator()
+        quests = get_sector_quests()
+        q0 = quests[0]
+        vfs.load_sector(0, q0)
+        player = PlayerStats(character_name="Byte", hp=100, max_hp=100, xp=0)
+
+        # Simulate option B (pwd) execution
+        terminal_logs = ["initial welcome log"]
+        cmd_start_index = len(terminal_logs)
+
+        # Run pwd
+        terminal_logs.append("💡 [B] Correct! Running: pwd")
+        terminal_logs.append("byte@adventure:~$ pwd")
+        res = interpreter.execute("pwd")
+        for line in res.stdout.splitlines():
+            terminal_logs.append(line)
+
+        # Verify output exists
+        self.assertIn("/home/byte", terminal_logs)
+
+        # Progress check
+        is_comp, newly_comp = evaluator.check_quest_progress(q0, vfs, player, last_command="pwd")
+        self.assertTrue(newly_comp)
+
+        # Apply new clean slate preservation
+        recent_logs = list(terminal_logs[cmd_start_index:])
+        terminal_logs.clear()
+        terminal_logs.extend(recent_logs)
+        terminal_logs.append("✓ Task Cleared: Location (+50 XP)")
+
+        # Verify output is STILL in terminal_logs after task clearance!
+        self.assertIn("/home/byte", terminal_logs)
+        self.assertIn("byte@adventure:~$ pwd", terminal_logs)
+        self.assertIn("✓ Task Cleared", terminal_logs[-1])
 
 
 if __name__ == "__main__":

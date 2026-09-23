@@ -73,3 +73,15 @@ class TestShellInterpreter(unittest.TestCase):
         self.assertEqual(missing.exit_code, 1)
         self.assertEqual(missing.backlash_damage, 0)
         self.assertIn("No such file or directory", missing.stderr)
+
+    def test_sort_less_and_input_redirection(self):
+        shell = ShellInterpreter()
+        shell.execute('echo "banana\napple\ncherry" > fruits.txt')
+        res_sort = shell.execute("sort fruits.txt")
+        self.assertEqual(res_sort.stdout, "apple\nbanana\ncherry\n")
+        res_rev = shell.execute("sort -r fruits.txt")
+        self.assertEqual(res_rev.stdout, "cherry\nbanana\napple\n")
+        res_less = shell.execute("less fruits.txt")
+        self.assertEqual(res_less.stdout, "banana\napple\ncherry\n")
+        res_in = shell.execute("grep apple < fruits.txt")
+        self.assertEqual(res_in.stdout, "apple\n")

@@ -1,11 +1,10 @@
-"""Unit Test Suite for CyberShell UI & Visual FX.
+"""Unit Test Suite for Byte's Linux Adventure UI & Visual Assets.
 
-Authors: Poornendhu & Gautham
 Covers:
-- Gautham: ASCII title logos, NPC character portraits, boss HP bar, siren banner,
-  terminal buffer widget, command history, combat ticker, and victory/defeat screens.
-- Poornendhu: Double header, split panels, screen routing, and layout clipping.
-Compatible with standard library unittest and pytest.
+- Visual Assets: ASCII logos, friendly character portraits, avatar badges, and celebration banners.
+- Terminal Buffer: Command history, scrolling log buffer, and prompt formatting.
+- Activity Ticker: Bottom broadcast strip, message categories, and width containment.
+- RPGApp Screen Controller: Dual-pane layout, screen routing, zero layout clipping, and UIProtocol conformance.
 """
 
 from __future__ import annotations
@@ -20,28 +19,32 @@ SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from cybershell.contracts import UIProtocol
+from cybershell.contracts import Item, PlayerStats, UIProtocol
 from cybershell.ui.ascii_art import (
+    ADVENTURE_LOGO,
+    ADVENTURE_LOGO_COMPACT,
     AVATARS,
     CYBER_LOGO,
-    CYBER_LOGO_BLOCK,
     CYBER_LOGO_COMPACT,
     DEFEAT_BANNER,
+    FIELD_MANUAL_HEADER,
     PORTRAITS,
     VICTORY_BANNER,
-    format_boss_hp_bar,
     get_avatar_badge,
     get_defeat_banner,
     get_logo,
     get_portrait,
-    get_siren_banner,
     get_victory_banner,
     strip_ansi,
     visual_len,
 )
 from cybershell.ui.renderer import (
+    draw_compact_hud,
+    draw_control_footer,
     draw_double_header,
+    draw_field_manual_card,
     draw_panel,
+    draw_question_card,
     draw_split_panels,
     pad_to_width,
     truncate_styled,
@@ -50,11 +53,11 @@ from cybershell.ui.rpg_app import CombatTicker, RPGApp, TerminalBuffer
 
 
 class TestASCIIArt(unittest.TestCase):
-    """Test ASCII logo, character portraits, and visual banners."""
+    """Test friendly ASCII logo, character portraits, and visual banners."""
 
     def test_cyber_logo_dimensions_and_content(self) -> None:
-        """Verify CYBER_LOGO fits standard 80-col terminal frames and has content."""
-        lines = CYBER_LOGO.strip("\n").splitlines()
+        """Verify adventure logo fits standard 80-col terminal frames and has content."""
+        lines = ADVENTURE_LOGO.strip("\n").splitlines()
         self.assertGreater(len(lines), 3)
         for line in lines:
             self.assertLessEqual(visual_len(line), 80, f"Logo line exceeded 80 chars: {line}")
@@ -68,16 +71,13 @@ class TestASCIIArt(unittest.TestCase):
         self.assertIn("\033[", styled)
         self.assertEqual(strip_ansi(styled), plain)
 
-        # Check wide block logo
-        wide_plain = get_logo(styled=False, wide=True)
-        self.assertIn("██████", wide_plain)
-
         # Check compact logo
-        self.assertIn("CYBERSHELL", CYBER_LOGO_COMPACT)
+        self.assertIn("BYTE'S LINUX ADVENTURE", ADVENTURE_LOGO_COMPACT)
+        self.assertEqual(CYBER_LOGO_COMPACT, ADVENTURE_LOGO_COMPACT)
 
     def test_all_npc_portraits_exist_and_are_uniform(self) -> None:
-        """Verify all story NPCs have complete portraits with uniform line lengths."""
-        required_npcs = ["byte", "cipher", "glitch", "aegis", "sentinel", "boss"]
+        """Verify all guides have complete portraits with uniform line lengths."""
+        required_npcs = ["byte", "fern", "penny", "nova", "guide", "player"]
         for npc in required_npcs:
             portrait = get_portrait(npc, styled=False)
             self.assertGreaterEqual(len(portrait), 5, f"Portrait for {npc} has fewer than 5 lines")
@@ -93,88 +93,80 @@ class TestASCIIArt(unittest.TestCase):
                 )
 
         # Verify fallback for unknown NPC defaults to Byte
-        unknown = get_portrait("unknown_drone_xyz")
+        unknown = get_portrait("unknown_character_xyz")
         byte_portrait = get_portrait("byte")
         self.assertEqual(unknown, byte_portrait)
 
         # Verify styled portraits preserve text and add ANSI codes
-        styled_cipher = get_portrait("cipher", styled=True)
-        plain_cipher = get_portrait("cipher", styled=False)
-        self.assertEqual(len(styled_cipher), len(plain_cipher))
-        for s_line, p_line in zip(styled_cipher, plain_cipher):
+        styled_fern = get_portrait("fern", styled=True)
+        plain_fern = get_portrait("fern", styled=False)
+        self.assertEqual(len(styled_fern), len(plain_fern))
+        for s_line, p_line in zip(styled_fern, plain_fern):
             self.assertEqual(strip_ansi(s_line), p_line)
 
     def test_avatar_badges(self) -> None:
-        """Verify compact single-line avatars for quick dialogue attribution."""
-        self.assertEqual(get_avatar_badge("byte"), "▲_▲")
-        self.assertEqual(get_avatar_badge("cipher"), "(⌐■_■)")
-        self.assertEqual(get_avatar_badge("glitch"), "§_Ø")
-        self.assertEqual(get_avatar_badge("aegis"), "[■_■]")
-        self.assertEqual(get_avatar_badge("sentinel"), "[▼_▼]")
-        self.assertEqual(get_avatar_badge("boss"), "[▼_▼]")
-        self.assertEqual(get_avatar_badge("non_existent"), "▲_▲")
-
-    def test_boss_hp_bar_formatting(self) -> None:
-        """Verify Boss HP gauge calculations across damage states."""
-        # 100% Full Health
-        full_bar = format_boss_hp_bar(100, 100, bar_width=10, styled=False)
-        self.assertIn("BOSS: [██████████] 100% (100/100 HP)", full_bar)
-
-        # 50% Health
-        half_bar = format_boss_hp_bar(50, 100, bar_width=10, styled=False)
-        self.assertIn("BOSS: [█████░░░░░]  50% (50/100 HP)", half_bar)
-
-        # 0% Health
-        dead_bar = format_boss_hp_bar(0, 100, bar_width=10, styled=False)
-        self.assertIn("BOSS: [░░░░░░░░░░]   0% (0/100 HP)", dead_bar)
-
-        # Clamping
-        over_bar = format_boss_hp_bar(150, 100, bar_width=10, styled=False)
-        self.assertIn("100%", over_bar)
-
-        neg_bar = format_boss_hp_bar(-20, 100, bar_width=10, styled=False)
-        self.assertIn("0%", neg_bar)
-
-        # Styled output
-        styled_bar = format_boss_hp_bar(20, 100, bar_width=10, styled=True)
-        self.assertIn("\033[", styled_bar)
-        self.assertEqual(strip_ansi(styled_bar), format_boss_hp_bar(20, 100, bar_width=10, styled=False))
-
-    def test_siren_banner_rendering(self) -> None:
-        """Verify siren banner formats within target width."""
-        banner = get_siren_banner("SECTOR 5 LOCKDOWN", width=60, styled=False)
-        self.assertIn("SECTOR 5 LOCKDOWN", banner)
-        self.assertIn("ALERT", banner)
-        lines = banner.splitlines()
-        for line in lines:
-            self.assertLessEqual(visual_len(line), 60)
+        """Verify friendly compact avatars for quick attribution."""
+        self.assertEqual(get_avatar_badge("byte"), "(・ω・)")
+        self.assertEqual(get_avatar_badge("fern"), "(^‿^)")
+        self.assertEqual(get_avatar_badge("penny"), "(•‿•)")
+        self.assertEqual(get_avatar_badge("nova"), "(★‿★)")
+        self.assertEqual(get_avatar_badge("non_existent"), "(・ω・)")
 
     def test_victory_and_defeat_banners(self) -> None:
-        """Verify victory and defeat banner formatting."""
+        """Verify celebration and encouraging banner formatting."""
         victory = get_victory_banner(styled=False)
-        self.assertIn("MAINFRAME LIBERATED", victory)
+        self.assertIn("ADVENTURE COMPLETE", victory)
+        self.assertIn("MASTER EXPLORER", victory)
         self.assertEqual(victory, VICTORY_BANNER)
 
         defeat = get_defeat_banner(styled=False)
-        self.assertIn("OPERATIVE TERMINATED", defeat)
+        self.assertIn("Mistakes are a great way to learn!", defeat)
         self.assertEqual(defeat, DEFEAT_BANNER)
 
         # Styled banners preserve clean text
         self.assertEqual(strip_ansi(get_victory_banner(styled=True)), VICTORY_BANNER)
         self.assertEqual(strip_ansi(get_defeat_banner(styled=True)), DEFEAT_BANNER)
 
+    def test_draw_question_card_rendering(self) -> None:
+        """Verify draw_question_card formats within 80 columns without clipping."""
+        card = draw_question_card(
+            question_num=1,
+            total_questions=2,
+            question_text="Which Linux command displays your current working directory path?",
+            options=[
+                "ls       - List files in current folder",
+                "pwd      - Print working directory path",
+                "cd       - Change current directory",
+                "whoami   - Display current logged in user",
+            ],
+            scenario="You just opened a terminal in a new system.",
+            width=80,
+            styled=True,
+        )
+        self.assertIn("QUESTION 1/2", card)
+        self.assertIn("[A]", card)
+        self.assertIn("[B]", card)
+        self.assertIn("[C]", card)
+        self.assertIn("[D]", card)
+        self.assertIn("pwd", card)
+        for line in card.splitlines():
+            self.assertLessEqual(visual_len(line), 80, f"Question card line exceeded 80 cols: {line}")
+
+        # Empty returns empty string
+        self.assertEqual(draw_question_card(question_text="", options=[]), "")
+
 
 class TestTerminalBufferWidget(unittest.TestCase):
-    """Test Gautham's terminal input widget and scrolling log buffer."""
+    """Test terminal input widget and scrolling log buffer."""
 
     def setUp(self) -> None:
-        self.buffer = TerminalBuffer(prompt="operative@cybershell:~$ ", max_lines=10)
+        self.buffer = TerminalBuffer(prompt="byte@adventure:~$ ", max_lines=10)
 
     def test_initial_buffer_state(self) -> None:
         self.assertGreater(len(self.buffer.logs), 0)
         visible = self.buffer.get_visible_logs(5)
         self.assertLessEqual(len(visible), 5)
-        self.assertEqual(self.buffer.prompt, "operative@cybershell:~$ ")
+        self.assertEqual(self.buffer.prompt, "byte@adventure:~$ ")
 
     def test_scrolling_buffer_capacity(self) -> None:
         """Buffer must cap total lines at max_lines and retain newest entries."""
@@ -188,22 +180,22 @@ class TestTerminalBufferWidget(unittest.TestCase):
     def test_add_command_and_history_navigation(self) -> None:
         """Commands must be logged and navigable via history."""
         self.buffer.add_command("pwd")
-        self.buffer.add_command("ls -la")
-        self.buffer.add_command("cat flag.txt")
+        self.buffer.add_command("ls -a")
+        self.buffer.add_command("cat note.txt")
 
-        self.assertEqual(self.buffer.history, ["pwd", "ls -la", "cat flag.txt"])
-        self.assertIn("operative@cybershell:~$ pwd", self.buffer.logs)
+        self.assertEqual(self.buffer.history, ["pwd", "ls -a", "cat note.txt"])
+        self.assertIn("byte@adventure:~$ pwd", self.buffer.logs)
 
         # History previous (backward)
-        self.assertEqual(self.buffer.history_prev(), "cat flag.txt")
-        self.assertEqual(self.buffer.history_prev(), "ls -la")
+        self.assertEqual(self.buffer.history_prev(), "cat note.txt")
+        self.assertEqual(self.buffer.history_prev(), "ls -a")
         self.assertEqual(self.buffer.history_prev(), "pwd")
         # Clamped at oldest
         self.assertEqual(self.buffer.history_prev(), "pwd")
 
         # History next (forward)
-        self.assertEqual(self.buffer.history_next(), "ls -la")
-        self.assertEqual(self.buffer.history_next(), "cat flag.txt")
+        self.assertEqual(self.buffer.history_next(), "ls -a")
+        self.assertEqual(self.buffer.history_next(), "cat note.txt")
         self.assertEqual(self.buffer.history_next(), "")
 
     def test_clear_buffer(self) -> None:
@@ -214,45 +206,41 @@ class TestTerminalBufferWidget(unittest.TestCase):
 
 
 class TestCombatLogTicker(unittest.TestCase):
-    """Test Gautham's bottom broadcast strip and combat feedback."""
+    """Test bottom activity broadcast strip and friendly feedback."""
 
     def setUp(self) -> None:
         self.ticker = CombatTicker()
 
     def test_ticker_initial_state(self) -> None:
-        self.assertIn("SYSTEM ONLINE", self.ticker.active_message)
+        self.assertIn("Welcome to Byte's Linux Adventure!", self.ticker.active_message)
 
     def test_ticker_categories_and_formatting(self) -> None:
-        # Electrical Backlash
-        self.ticker.log("ELECTRICAL BACKLASH! -15 HP", category="backlash")
-        self.assertEqual(self.ticker.active_message, "⚡ ELECTRICAL BACKLASH! -15 HP")
+        # Star / Badge
+        self.ticker.log("First Step Badge Earned!", category="badge")
+        self.assertEqual(self.ticker.active_message, "⭐ First Step Badge Earned!")
 
-        # Critical Hit
-        self.ticker.log("CRITICAL HIT! Firewall breached", category="crit")
-        self.assertEqual(self.ticker.active_message, "💥 CRITICAL HIT! Firewall breached")
-
-        # Loot Acquired
-        self.ticker.log("Quarantine Keychip acquired", category="loot")
-        self.assertEqual(self.ticker.active_message, "🎁 Quarantine Keychip acquired")
+        # Goodie Acquired
+        self.ticker.log("Golden Compass acquired", category="loot")
+        self.assertEqual(self.ticker.active_message, "🎁 Golden Compass acquired")
 
         # Level Up / XP
-        self.ticker.log("LEVEL UP! Rank: Junior Operative", category="level")
-        self.assertEqual(self.ticker.active_message, "🌟 LEVEL UP! Rank: Junior Operative")
+        self.ticker.log("LEVEL UP! Rank: Master Explorer", category="level")
+        self.assertEqual(self.ticker.active_message, "🌟 LEVEL UP! Rank: Master Explorer")
 
         # Objective
-        self.ticker.log("OBJECTIVE ACQUIRED: +50 XP", category="objective")
-        self.assertEqual(self.ticker.active_message, "🎯 OBJECTIVE ACQUIRED: +50 XP")
+        self.ticker.log("OBJECTIVE COMPLETED: +50 XP", category="objective")
+        self.assertEqual(self.ticker.active_message, "🎯 OBJECTIVE COMPLETED: +50 XP")
 
-        # Siren Alert
-        self.ticker.log("DAEMON INCOMING", category="siren")
-        self.assertEqual(self.ticker.active_message, "🚨 DAEMON INCOMING")
+        # Hint
+        self.ticker.log("Try typing 'pwd'", category="hint")
+        self.assertEqual(self.ticker.active_message, "💡 Try typing 'pwd'")
 
     def test_ticker_render_width_containment(self) -> None:
         """Rendered ticker must strictly fit terminal width without line breaking."""
-        self.ticker.log("CRITICAL HIT! Mainframe core compromised", category="crit")
+        self.ticker.log("Level 10 completed! Great job!", category="level")
         rendered = self.ticker.render(width=80)
         self.assertLessEqual(visual_len(rendered), 80)
-        self.assertIn("CRITICAL HIT", rendered)
+        self.assertIn("Level 10 completed", rendered)
 
         # Narrow terminal truncation
         narrow_rendered = self.ticker.render(width=30)
@@ -261,56 +249,32 @@ class TestCombatLogTicker(unittest.TestCase):
 
 
 class TestRPGAppGauthamIntegration(unittest.TestCase):
-    """Test RPGApp with Gautham's components and UIProtocol compliance."""
+    """Test RPGApp screen controller and UIProtocol compliance."""
 
     def setUp(self) -> None:
         self.app = RPGApp(character_name="Byte", hp=100, max_hp=100, xp=50)
 
     def test_ui_protocol_conformance(self) -> None:
-        """Verify RPGApp satisfies Amy's frozen UIProtocol."""
+        """Verify RPGApp satisfies UIProtocol from contracts.py."""
         self.assertTrue(
             isinstance(self.app, UIProtocol),
             "RPGApp does not satisfy UIProtocol from contracts.py",
         )
 
     def test_update_stats(self) -> None:
-        self.app.update_stats(hp=85, max_hp=110, xp=150)
-        self.assertEqual(self.app.hp, 85)
-        self.assertEqual(self.app.max_hp, 110)
+        self.app.update_stats(hp=100, max_hp=100, xp=150)
         self.assertEqual(self.app.xp, 150)
 
     def test_log_ticker(self) -> None:
-        self.app.log_ticker("SECURITY ALARM TRIGGERED", category="siren")
-        self.assertIn("SECURITY ALARM TRIGGERED", self.app.ticker.active_message)
-        self.assertIn("🚨", self.app.ticker.active_message)
-
-    def test_boss_hud_toggle_and_render(self) -> None:
-        """Verify Boss HUD renders when active in Sector 5."""
-        self.assertFalse(self.app.is_boss_active)
-        self.app.set_boss_encounter(True, name="SENTINEL OVERLORD", hp=75, max_hp=100)
-        self.assertTrue(self.app.is_boss_active)
-
-        boss_hud = self.app.render_boss_hud(width=80)
-        self.assertIn("SENTINEL OVERLORD", boss_hud)
-        self.assertIn("75%", boss_hud)
-
-        # Update Boss HP
-        self.app.update_boss_hp(25)
-        self.assertEqual(self.app.boss_hp, 25)
-        updated_hud = self.app.render_boss_hud(width=80)
-        self.assertIn("25%", updated_hud)
-
-        # Render lab with Boss active
-        lab_with_boss = self.app.render_lab(80)
-        self.assertIn("SENTINEL OVERLORD", lab_with_boss)
-        self.assertIn("MISSION INTEL", lab_with_boss)
-        self.assertIn("TERMINAL", lab_with_boss)
+        self.app.log_ticker("LEVEL COMPLETE!", category="objective")
+        self.assertIn("LEVEL COMPLETE!", self.app.ticker.active_message)
+        self.assertIn("🎯", self.app.ticker.active_message)
 
     def test_title_screen_contains_logo_and_navigation(self) -> None:
-        title = self.app.render_title(80)
-        self.assertIn("CYBERSHELL RPG", title)
+        title = strip_ansi(self.app.render_title(80))
+        self.assertIn("MAIN DIRECTORY", title)
         self.assertIn("____", title)
-        self.assertIn("[1] ENTER MISSION LAB", title)
+        self.assertIn("1 \ue0b4  START ADVENTURE", title)
 
     def test_zero_layout_clipping_at_80_columns(self) -> None:
         """Strict check: every line rendered at 80 cols must NOT exceed 80 chars."""
@@ -318,20 +282,152 @@ class TestRPGAppGauthamIntegration(unittest.TestCase):
         for line in self.app.render_title(80).splitlines():
             self.assertLessEqual(visual_len(line), 80, f"Title line clipped: {line}")
 
-        # Mission Lab
+        # Lab / Playground screen
         for line in self.app.render_lab(80).splitlines():
             self.assertLessEqual(visual_len(line), 80, f"Lab line clipped: {line}")
 
-        # Boss HUD
-        for line in self.app.render_boss_hud(80).splitlines():
-            self.assertLessEqual(visual_len(line), 80, f"Boss HUD line clipped: {line}")
+        # Codex / Guide screen
+        for line in self.app.render_codex(80).splitlines():
+            self.assertLessEqual(visual_len(line), 80, f"Codex line clipped: {line}")
 
     def test_victory_and_defeat_screens(self) -> None:
         victory = self.app.render_victory(80)
-        self.assertIn("MAINFRAME LIBERATED", victory)
+        self.assertIn("ADVENTURE COMPLETE", victory)
 
         defeat = self.app.render_defeat(80)
-        self.assertIn("OPERATIVE TERMINATED", defeat)
+        self.assertIn("Mistakes are a great way to learn!", defeat)
+
+    def test_field_manual_card_dimensions_and_visibility(self) -> None:
+        """Field manual card must be strictly <= 16 lines and <= 80 chars wide on all pages."""
+        # Page 1: Rules
+        card_p1 = draw_field_manual_card(page=1, width=80, styled=False)
+        lines_p1 = card_p1.splitlines()
+        self.assertLessEqual(len(lines_p1), 16, f"Page 1 has {len(lines_p1)} lines, expected <= 16")
+        for line in lines_p1:
+            self.assertLessEqual(visual_len(line), 80, f"Page 1 line exceeded 80 cols: {line}")
+        self.assertIn("15 Levels", card_p1)
+        self.assertIn("Real Shell", card_p1)
+        self.assertIn("ZERO damage", card_p1)
+        self.assertIn("Easy Hints", card_p1)
+        self.assertIn("Progress Map", card_p1)
+        self.assertIn("Main Menu", card_p1)
+        self.assertIn("Byte", card_p1)
+
+        # Page 2: Commands
+        card_p2 = draw_field_manual_card(page=2, width=80, styled=False)
+        lines_p2 = card_p2.splitlines()
+        self.assertLessEqual(len(lines_p2), 16, f"Page 2 has {len(lines_p2)} lines, expected <= 16")
+        for line in lines_p2:
+            self.assertLessEqual(visual_len(line), 80, f"Page 2 line exceeded 80 cols: {line}")
+        self.assertIn("pwd", card_p2)
+        self.assertIn("cd", card_p2)
+        self.assertIn("cat", card_p2)
+        self.assertIn("grep", card_p2)
+
+    def test_render_manual_visibility(self) -> None:
+        """RPGApp.render_manual must fit standard frames without clipping."""
+        manual = self.app.render_manual(80)
+        lines = manual.splitlines()
+        self.assertLessEqual(len(lines), 16)
+        for line in lines:
+            self.assertLessEqual(visual_len(line), 80, f"Manual line clipped: {line}")
+        self.assertIn("FIELD MANUAL & RULES", manual)
+
+    def test_draw_double_header_dimensions(self) -> None:
+        """Verify draw_double_header renders within exact specified width."""
+        header = draw_double_header(
+            character_name="Byte",
+            hp=100,
+            max_hp=100,
+            xp=150,
+            sector_title="ADVENTURE MAP",
+            width=74,
+            styled=True,
+        )
+        lines = header.splitlines()
+        self.assertEqual(len(lines), 4)
+        for line in lines:
+            self.assertEqual(visual_len(line), 74)
+        self.assertIn("BYTE'S LINUX ADVENTURE", header)
+        self.assertIn("150 XP", header)
+        self.assertIn("ADVENTURE MAP", header)
+
+    def test_view_field_manual_navigation(self) -> None:
+        """view_field_manual must support page progression and exit cleanly."""
+        from unittest.mock import patch
+        from cybershell.run import view_field_manual
+
+        # Press Enter on page 1 -> moves to page 2 -> press Enter on page 2 -> exits
+        with patch("builtins.input", side_effect=["", ""]):
+            with patch("sys.stdout"):
+                view_field_manual(80)
+
+        # Type '0' on page 1 -> exits immediately
+        with patch("builtins.input", side_effect=["0"]):
+            with patch("sys.stdout"):
+                view_field_manual(80)
+
+    def test_view_codex_navigation(self) -> None:
+        """view_codex allows searching commands and exits cleanly."""
+        from io import StringIO
+        from unittest.mock import patch
+        from cybershell.run import view_codex
+        from cybershell.tools.codex import Codex
+
+        codex = Codex()
+        player = PlayerStats(character_name="Byte", hp=100, max_hp=100, xp=50)
+
+        # Search for pwd, then press Enter to return, then 0 to exit
+        buf = StringIO()
+        with patch("builtins.input", side_effect=["pwd", "", "0"]):
+            with patch("sys.stdout", buf):
+                view_codex(codex, player, 80)
+        output = buf.getvalue()
+        self.assertIn("LINUX COMMAND GUIDE", output)
+        self.assertIn("GUIDE: PWD", output)
+
+    def test_view_inventory_rendering(self) -> None:
+        """view_inventory displays backpack items and badges without errors."""
+        from io import StringIO
+        from unittest.mock import patch
+        from cybershell.run import view_inventory
+
+        player = PlayerStats(character_name="Byte", hp=100, max_hp=100, xp=100)
+        player.inventory.append(
+            Item(id="star_1", name="Gold Star", description="A shiny star", rarity="legendary")
+        )
+        player.badges.append("Scout Badge")
+
+        buf = StringIO()
+        with patch("builtins.input", side_effect=[""]):
+            with patch("sys.stdout", buf):
+                view_inventory(player, 80)
+        output = buf.getvalue()
+        self.assertIn("YOUR BACKPACK & GOODIES", output)
+        self.assertIn("Gold Star", output)
+        self.assertIn("Scout Badge", output)
+
+    def test_view_map_rendering(self) -> None:
+        """view_map displays 15 levels and exits on Enter."""
+        from io import StringIO
+        from unittest.mock import patch
+        from cybershell.run import view_map
+        from cybershell.tools.map import MainframeMap
+        from cybershell.game.quests import get_sector_quests
+
+        player = PlayerStats(character_name="Byte", hp=100, max_hp=100, xp=100, current_sector=1)
+        player.completed_sectors.append(0)
+        mainframe = MainframeMap()
+        quests = get_sector_quests()
+
+        buf = StringIO()
+        with patch("builtins.input", side_effect=[""]):
+            with patch("sys.stdout", buf):
+                view_map(mainframe, player, quests, 80)
+        output = buf.getvalue()
+        self.assertIn("ADVENTURE MAP (15 LEVELS)", output)
+        self.assertIn("Completed", output)
+        self.assertIn("Current", output)
 
 
 if __name__ == "__main__":

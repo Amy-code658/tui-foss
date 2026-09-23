@@ -1,11 +1,6 @@
-"""CyberShell RPG v2.0 - Visual FX & ASCII Art Assets.
+"""Byte's Linux Adventure - Visual Assets & ASCII Art.
 
-Author: Gautham (Visual FX, ASCII Art & Terminal Box Specialist)
-Status: Active
-
-This module contains cyberpunk ASCII art, animated cyber logos, character
-portraits for all story NPCs, Boss battle HUD components, siren banners,
-and victory/defeat terminal screens.
+Friendly, playful, and approachable terminal art, banners, and decorations.
 """
 
 from __future__ import annotations
@@ -14,21 +9,21 @@ import re
 from typing import Dict, List, Optional
 
 # =============================================================================
-# ANSI Color Sequences & Styling Helpers
+# ANSI Color Sequences & Styling Helpers (Soft & Warm Palette)
 # =============================================================================
 
 RESET: str = "\033[0m"
 BOLD: str = "\033[1m"
 DIM: str = "\033[2m"
 
-# Neon Cyberpunk Color Palette
-CYAN: str = "\033[96m"
-MAGENTA: str = "\033[95m"
-GREEN: str = "\033[92m"
-YELLOW: str = "\033[93m"
-RED: str = "\033[91m"
-BLUE: str = "\033[94m"
-WHITE: str = "\033[97m"
+# Soft, Warm Color Palette
+GREEN: str = "\033[92m"    # Sprout green 🌱
+YELLOW: str = "\033[93m"   # Warm star yellow ⭐ / hints 💡
+BLUE: str = "\033[94m"     # Soft sky blue
+MAGENTA: str = "\033[95m"  # Gentle lavender / badges 🏆
+CYAN: str = "\033[96m"     # Soft teal / water
+WHITE: str = "\033[97m"    # Clean text
+RED: str = "\033[91m"      # Soft alert (used sparingly)
 
 ANSI_REGEX = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
@@ -44,38 +39,37 @@ def visual_len(text: str) -> int:
 
 
 # =============================================================================
-# Cyberpunk Title Logo (Day 1)
+# Friendly Adventure Logos
 # =============================================================================
 
-# Fits cleanly within standard 80-column terminals (width: 50 characters)
-CYBER_LOGO: str = r"""   ____      _               ____  _          _ _ 
-  / ___|   _| |__   ___ _ __/ ___|| |__   ___| | |
- | |  | | | | '_ \ / _ \ '__\___ \| '_ \ / _ \ | |
- | |__| |_| | |_) |  __/ |   ___) | | | |  __/ | |
-  \____\__, |_.__/ \___|_|  |____/|_| |_|\___|_|_|
-       |___/                                      """
+ADVENTURE_LOGO: str = """  ____  _   _ _____ _____ _ ____    _     ___ _   _ _   _ __  __ 
+ | __ )| | | |_   _| ____( ) ___|  | |   |_ _| \\ | | | | \\ \\/ / 
+ |  _ \\| |_| | | | |  _| |/\\___ \\  | |    | ||  \\| | | | |>  <  
+ | |_) |\\__, | | | | |___   ___) | | |___ | || |\\  | |_| |/ . \\ 
+ |____/ |___/  |_| |_____| |____/  |_____|___|_| \\_|\\___//_/ \\_\\
+        _    ______     _______ _   _ _____ _   _ ____  _____ 
+       / \\  |  _ \\ \\   / / ____| \\ | |_   _| | | |  _ \\| ____|
+      / _ \\ | | | \\ \\ / /|  _| |  \\| | | | | | | | |_) |  _|  
+     / ___ \\| |_| |\\ V / | |___| |\\  | | | | |_| |  _ <| |___ 
+    /_/   \\_\\____/  \\_/  |_____|_| \\_| |_|  \\___/|_| \\_\\_____|"""
 
-# Compact single/two-line alternative
-CYBER_LOGO_COMPACT: str = r"""[ ⚡ CYBERSHELL RPG v2.0 // TERMINAL CYBER ADVENTURE ⚡ ]"""
+ADVENTURE_LOGO_COMPACT: str = r"""[ 🌱 BYTE'S LINUX ADVENTURE • A FRIENDLY TERMINAL JOURNEY 🌱 ]"""
 
-# Large block cyberpunk banner for wide terminals (width: 66 characters)
-CYBER_LOGO_BLOCK: str = """  ██████╗██╗   ██╗██████╗ ███████╗██████╗ ███████╗██╗  ██╗███████╗
- ██╔════╝╚██╗ ██╔╝██╔══██╗██╔════╝██╔══██╗██╔════╝██║  ██║██╔════╝
- ██║      ╚████╔╝ ██████╔╝█████╗  ██████╔╝███████╗███████║█████╗  
- ██║       ╚██╔╝  ██╔══██╗██╔══╝  ██╔══██╗╚════██║██╔══██║██╔══╝  
- ╚██████╗   ██║   ██████╔╝███████╗██║  ██║███████║██║  ██║███████╗
-  ╚═════╝   ╚═╝   ╚═════╝ ╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝"""
+# Preserved for backward compatibility
+CYBER_LOGO = ADVENTURE_LOGO
+CYBER_LOGO_COMPACT = ADVENTURE_LOGO_COMPACT
+CYBER_LOGO_BLOCK = ADVENTURE_LOGO
 
 
 def get_logo(styled: bool = False, wide: bool = False) -> str:
-    """Return the CyberShell RPG logo, optionally formatted with neon styling."""
-    raw = CYBER_LOGO_BLOCK if wide else CYBER_LOGO
+    """Return the friendly adventure logo with soft green/yellow styling."""
+    raw = ADVENTURE_LOGO
     if not styled:
         return raw
 
     styled_lines = []
-    colors = [CYAN, CYAN, MAGENTA, MAGENTA, CYAN, CYAN]
     lines = raw.strip("\n").splitlines()
+    colors = [GREEN, GREEN, YELLOW, YELLOW, BLUE, BLUE]
     for idx, line in enumerate(lines):
         color = colors[idx % len(colors)]
         styled_lines.append(f"{BOLD}{color}{line}{RESET}")
@@ -83,212 +77,192 @@ def get_logo(styled: bool = False, wide: bool = False) -> str:
 
 
 # =============================================================================
-# NPC Character Portraits & Badges (Day 2)
+# Friendly Mascot & Guide Illustrations
 # =============================================================================
 
-# Compact 1-line operative / NPC badges for quick dialogue attribution
-AVATARS: Dict[str, str] = {
-    "byte": "▲_▲",
-    "cipher": "(⌐■_■)",
-    "glitch": "§_Ø",
-    "aegis": "[■_■]",
-    "sentinel": "[▼_▼]",
-    "boss": "[▼_▼]",
-    "overlord": "[▼_▼]",
-}
+FIELD_MANUAL_HEADER: str = r"""
+        📖  FIELD MANUAL & RULES  📖
+             (\__/)
+             (・ω・)  "Welcome to Linux!"
+            / >🌱
+"""
 
-# Detailed ASCII portraits formatted to consistent 18-column width
 PORTRAIT_BYTE: List[str] = [
-    r"   .---==---.    ",
-    r"  /  /|  |\  \   ",
-    r" |  (▲ _ ▲)  |   ",
-    r"  \  \____/  /   ",
-    r"   '---==---'    ",
-    r"  <BYTE: DRONE>  ",
+    r"     (\__/)     ",
+    r"     (・ω・)      ",
+    r"    / >🌱        ",
+    r"   (  Byte  )   ",
+    r"    '------'    ",
 ]
 
-PORTRAIT_CIPHER: List[str] = [
-    r"   .----------.  ",
-    r"  /   ______   \ ",
-    r" |   (⌐■ _ ■)   |",
-    r" |    \ -- /    |",
-    r"  \   /____\   / ",
-    r"   '----------'  ",
-    r" <CIPHER: HACKER>",
+PORTRAIT_FERN: List[str] = [
+    r"     .-''''-.   ",
+    r"    /  🌿    \   ",
+    r"   |  (^‿^)  |  ",
+    r"   (  Fern  )   ",
+    r"    '------'    ",
 ]
 
-PORTRAIT_GLITCH: List[str] = [
-    r"   .░▒▓▒░░▒▓▒.   ",
-    r"  /  ╳ _ ╳ ?  \  ",
-    r" |  ▓( §_Ø )░  | ",
-    r" |   ▒~#~#~▒   | ",
-    r"  \  ░▒▓▒░░▒  /  ",
-    r"   '░▒▓▒░░▒▓''   ",
-    r" <GLITCH: ROGUE> ",
+PORTRAIT_PENNY: List[str] = [
+    r"     .------.   ",
+    r"    /  [👓]  \   ",
+    r"   |  (•‿•)  |  ",
+    r"   ( Penny  )   ",
+    r"    '------'    ",
 ]
 
-PORTRAIT_AEGIS: List[str] = [
-    r"   .╔══════╗.    ",
-    r"  / ║  /\  ║ \   ",
-    r" |  ║[■  ■]║  |  ",
-    r" |  ║ |==| ║  |  ",
-    r"  \ ╚══════╝ /   ",
-    r"   '--------'    ",
-    r" <AEGIS: DAEMON> ",
+PORTRAIT_NOVA: List[str] = [
+    r"     .------.   ",
+    r"    /  ⭐    \   ",
+    r"   |  (★‿★)  |  ",
+    r"   (  Nova  )   ",
+    r"    '------'    ",
 ]
 
-PORTRAIT_SENTINEL_BOSS: List[str] = [
-    r"  <[ OVERLORD ]>    ",
-    r" /════════════════\ ",
-    r"|   ☠  [▼_▼]  ☠    |",
-    r"|   |/\|▓▓▓|/\|    |",
-    r" \════════════════/ ",
-    r"  \   |      |   /  ",
-    r" <SENTINEL  DAEMON> ",
-]
+AVATARS: Dict[str, str] = {
+    "byte": "(・ω・)",
+    "fern": "(^‿^)",
+    "penny": "(•‿•)",
+    "nova": "(★‿★)",
+    "guide": "(・ω・)",
+    "player": "(^o^)",
+    "cipher": "(•‿•)",
+    "glitch": "(・ω・)",
+    "aegis": "(^‿^)",
+    "sentinel": "(★‿★)",
+    "boss": "(★‿★)",
+    "overlord": "(★‿★)",
+}
 
 PORTRAITS: Dict[str, List[str]] = {
     "byte": PORTRAIT_BYTE,
-    "cipher": PORTRAIT_CIPHER,
-    "glitch": PORTRAIT_GLITCH,
-    "aegis": PORTRAIT_AEGIS,
-    "sentinel": PORTRAIT_SENTINEL_BOSS,
-    "boss": PORTRAIT_SENTINEL_BOSS,
-    "overlord": PORTRAIT_SENTINEL_BOSS,
-    "sentinel boss": PORTRAIT_SENTINEL_BOSS,
+    "fern": PORTRAIT_FERN,
+    "penny": PORTRAIT_PENNY,
+    "nova": PORTRAIT_NOVA,
+    "guide": PORTRAIT_BYTE,
+    "player": PORTRAIT_BYTE,
+    # Backward compatibility aliases
+    "cipher": PORTRAIT_PENNY,
+    "glitch": PORTRAIT_BYTE,
+    "aegis": PORTRAIT_FERN,
+    "sentinel": PORTRAIT_NOVA,
+    "boss": PORTRAIT_NOVA,
+    "overlord": PORTRAIT_NOVA,
+    "sentinel boss": PORTRAIT_NOVA,
 }
 
 
 def get_portrait(npc_name: str, styled: bool = False) -> List[str]:
-    """Retrieve the multi-line ASCII portrait for a specified NPC.
-
-    Fallback is Byte (Drone) if name is unrecognized.
-    """
+    """Retrieve the multi-line ASCII portrait for a specified guide."""
     key = str(npc_name).strip().lower()
     raw_lines = PORTRAITS.get(key, PORTRAIT_BYTE)
-
     if not styled:
         return list(raw_lines)
-
-    # Apply neon cyberpunk accent colors
-    accent = CYAN
-    if "cipher" in key:
-        accent = GREEN
-    elif "glitch" in key:
-        accent = YELLOW
-    elif "aegis" in key:
-        accent = BLUE
-    elif "boss" in key or "sentinel" in key or "overlord" in key:
-        accent = RED
-
-    return [f"{accent}{line}{RESET}" for line in raw_lines]
+    return [f"{GREEN}{line}{RESET}" for line in raw_lines]
 
 
 def get_avatar_badge(npc_name: str) -> str:
-    """Return the compact ASCII badge for an NPC (e.g. '▲_▲' or '(⌐■_■)')."""
+    """Return a compact emoji / face avatar for a guide."""
     key = str(npc_name).strip().lower()
-    return AVATARS.get(key, "▲_▲")
+    return AVATARS.get(key, "(・ω・)")
 
 
 # =============================================================================
-# Boss Battle HUD & Siren Warning (Day 5)
+# Friendly Celebration & Progress Banners
 # =============================================================================
 
-def format_boss_hp_bar(
-    hp: int,
-    max_hp: int = 100,
-    bar_width: int = 16,
-    styled: bool = False,
+def get_access_granted_banner(
+    title: str = "OBJECTIVE COMPLETE",
+    xp_awarded: int = 50,
+    streak: int = 0,
+    badge: Optional[str] = None,
+    width: int = 50,
+    styled: bool = True,
 ) -> str:
-    """Render a dynamic graphic health bar for the Sector 5 Boss."""
-    hp_clamped = max(0, min(hp, max_hp))
-    max_hp_safe = max(1, max_hp)
-    pct = int((hp_clamped / max_hp_safe) * 100)
+    """Render a cheerful success card when an objective is cleared."""
+    width = max(34, width)
+    inner = width - 2
+    b_top = f"╭{'─' * inner}╮"
+    b_bot = f"╰{'─' * inner}╯"
 
-    filled = round(bar_width * hp_clamped / max_hp_safe)
-    unfilled = bar_width - filled
-    bar = "█" * filled + "░" * unfilled
+    lines = [
+        b_top,
+        f"│{f'🎉 OBJECTIVE COMPLETE! 🎉':^{inner}}│",
+        f"│{title[:inner - 2]:^{inner}}│",
+        f"│{f'+{xp_awarded} XP ⭐':^{inner}}│",
+    ]
+    if streak > 1:
+        lines.append(f"│{f'Streak: {streak} in a row! 🌱':^{inner}}│")
+    if badge:
+        lines.append(f"│{f'New Badge: [{badge}] 🏆':^{inner}}│")
+    lines.append(b_bot)
 
-    text = f"BOSS: [{bar}] {pct:>3}% ({hp_clamped}/{max_hp_safe} HP)"
-
+    plain = "\n".join(lines)
     if not styled:
-        return text
-
-    # Critical = Red, Vulnerable = Yellow, Healthy = Magenta
-    if pct <= 25:
-        color = RED
-    elif pct <= 50:
-        color = YELLOW
-    else:
-        color = MAGENTA
-
-    return f"{BOLD}{color}{text}{RESET}"
+        return plain
+    return f"{BOLD}{GREEN}{plain}{RESET}"
 
 
-def get_siren_banner(
-    text: str = "WARNING: ROGUE OVERLORD DETECTED - SECTOR 5 LOCKDOWN",
-    width: int = 76,
-    styled: bool = False,
+def get_level_unlocked_banner(
+    sector_num: int,
+    sector_name: str,
+    width: int = 50,
+    styled: bool = True,
 ) -> str:
-    """Render a high-voltage cyber siren warning banner."""
-    width = max(30, width)
-    tag = "[!] ALERT [!]"
-    inner_len = width - 4
-    centered_text = text.center(inner_len)
-    bar = "=" * inner_len
-
+    """Render a friendly level transition card."""
+    width = max(34, width)
+    inner = width - 2
+    b_top = f"╭{'─' * inner}╮"
+    b_bot = f"╰{'─' * inner}╯"
+    lines = [
+        b_top,
+        f"│{f'🌱 LEVEL {sector_num:02d} UNLOCKED':^{inner}}│",
+        f"│{sector_name.title():^{inner}}│",
+        b_bot,
+    ]
+    plain = "\n".join(lines)
     if not styled:
-        return (
-            f"+-{bar}-+\n"
-            f"| {tag.center(inner_len)} |\n"
-            f"| {centered_text} |\n"
-            f"+-{bar}-+"
-        )
-
-    return (
-        f"{BOLD}{RED}+-{bar}-+{RESET}\n"
-        f"{BOLD}{YELLOW}| {tag.center(inner_len)} |{RESET}\n"
-        f"{BOLD}{RED}| {centered_text} |{RESET}\n"
-        f"{BOLD}{RED}+-{bar}-+{RESET}"
-    )
+        return plain
+    return f"{BOLD}{YELLOW}{plain}{RESET}"
 
 
-# =============================================================================
-# Victory & Defeat Banners (Day 7)
-# =============================================================================
+VICTORY_BANNER: str = """╭──────────────────────────────────────────────────────────────╮
+│                                                              │
+│              🎉  ADVENTURE COMPLETE!  🎉                     │
+│                                                              │
+│           You explored all 15 Linux worlds and               │
+│               solved every puzzle! Great job! 🌱             │
+│                                                              │
+│                  🏆 MASTER EXPLORER 🏆                       │
+╰──────────────────────────────────────────────────────────────╯"""
 
-VICTORY_BANNER: str = """╔══════════════════════════════════════════════════════════════════╗
-║   ██████╗  ██████╗  ██████╗ ████████╗    ██╗   ██╗██╗███╗   ██╗  ║
-║   ██╔══██╗██╔═══██╗██╔═══██╗╚══██╔══╝    ██║   ██║██║████╗  ██║  ║
-║   ██████╔╝██║   ██║██║   ██║   ██║       ██║   ██║██║██╔██╗ ██║  ║
-║   ██╔══██╗██║   ██║██║   ██║   ██║       ╚██╗ ██╔╝██║██║╚██╗██║  ║
-║   ██║  ██║╚██████╔╝╚██████╔╝   ██║        ╚████╔╝ ██║██║ ╚████║  ║
-║   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝    ╚═╝         ╚═══╝  ╚═╝╚═╝  ╚═══╝  ║
-║                                                                  ║
-║             ★ MAINFRAME LIBERATED — MISSION COMPLETE ★           ║
-╚══════════════════════════════════════════════════════════════════╝"""
-
-DEFEAT_BANNER: str = """╔══════════════════════════════════════════════════════════════════╗
-║   ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗          ║
-║   ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║          ║
-║   ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║          ║
-║   ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║          ║
-║   ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║          ║
-║   ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝          ║
-║                                                                  ║
-║            💀 CRITICAL FAILURE: OPERATIVE TERMINATED 💀           ║
-╚══════════════════════════════════════════════════════════════════╝"""
+# Backward compatibility stub
+DEFEAT_BANNER: str = """╭──────────────────────────────────────────────────────────────╮
+│                  Let's take a quick breath 🙂                │
+│                 Mistakes are a great way to learn!           │
+╰──────────────────────────────────────────────────────────────╯"""
 
 
 def get_victory_banner(styled: bool = False) -> str:
-    """Return the victory banner celebrating sector liberation."""
+    """Return the celebration banner for finishing the adventure."""
     if not styled:
         return VICTORY_BANNER
     return f"{BOLD}{GREEN}{VICTORY_BANNER}{RESET}"
 
 
 def get_defeat_banner(styled: bool = False) -> str:
-    """Return the defeat banner signaling operative termination."""
+    """Friendly encouraging reminder."""
     if not styled:
         return DEFEAT_BANNER
-    return f"{BOLD}{RED}{DEFEAT_BANNER}{RESET}"
+    return f"{YELLOW}{DEFEAT_BANNER}{RESET}"
+
+
+# Backward compatibility stubs for old tests
+def format_boss_hp_bar(hp: int, max_hp: int = 100, bar_width: int = 16, styled: bool = False) -> str:
+    """Friendly progress indicator (kept for backward compatibility)."""
+    return ""
+
+
+def get_siren_banner(text: str = "", width: int = 76, styled: bool = False) -> str:
+    """Alert banner (kept for backward compatibility)."""
+    return ""

@@ -35,6 +35,12 @@ class ShellCommands:
             "chmod": self.chmod,
             "grep": self.grep,
             "wc": self.wc,
+            "sort": self.sort,
+            "less": self.less,
+            "find": self.find,
+            "man": self.man,
+            "lookup": self.lookup,
+            "help": self.help,
         }
 
     @property
@@ -247,7 +253,14 @@ class ShellCommands:
             return CommandResult(stderr="chmod: missing operand\n", exit_code=1)
         mode, paths = args[0], args[1:]
         for path in paths:
-            self.vfs.chmod(path, mode)
+            if mode in ("+x", "a+x", "u+x"):
+                node = self.vfs.get_node(path)
+                if node is not None:
+                    node.permissions = (node.permissions | 0o111) & 0o777
+                else:
+                    self.vfs.chmod(path, "755")
+            else:
+                self.vfs.chmod(path, mode)
         return CommandResult()
 
     def grep(self, args: Sequence[str], stdin: str = "") -> CommandResult:
@@ -286,3 +299,127 @@ class ShellCommands:
         if isinstance(content, CommandResult):
             return content
         return CommandResult(stdout=f"{content.count(chr(10))}\n")
+
+    def sort(self, args: Sequence[str], stdin: str = "") -> CommandResult:
+        reverse = False
+        numeric = False
+        unique = False
+        paths: List[str] = []
+        for arg in args:
+            if arg.startswith("-") and arg != "-":
+                flags = arg[1:]
+                if "r" in flags:
+                    reverse = True
+                if "n" in flags:
+                    numeric = True
+                if "u" in flags:
+                    unique = True
+            else:
+                paths.append(arg)
+        content = self._read_inputs(paths, stdin, "sort")
+        if isinstance(content, CommandResult):
+            return content
+        lines = [line for line in content.splitlines(keepends=True)]
+        if unique:
+            lines = list(dict.fromkeys(lines))
+        if numeric:
+            def _num_key(line: str):
+                parts = line.strip().split()
+                if parts:
+                    try:
+                        return (0, float(parts[0]))
+                    except ValueError:
+                        return (1, parts[0])
+                return (2, "")
+            lines.sort(key=_num_key, reverse=reverse)
+        else:
+            lines.sort(reverse=reverse)
+        return CommandResult(stdout="".join(lines), exit_code=0)
+
+    def less(self, args: Sequence[str], stdin: str = "") -> CommandResult:
+        return self.cat(args, stdin)
+
+    def find(self, args: Sequence[str], stdin: str = "") -> CommandResult:
+        import fnmatch
+        import posixpath
+        start_path = "."
+        name_pattern = "*"
+        type_filter = None
+
+        idx = 0
+        if args and not args[0].startswith("-"):
+            start_path = args[0]
+            idx = 1
+
+        while idx < len(args):
+            arg = args[idx]
+            if arg == "-name" and idx + 1 < len(args):
+                name_pattern = args[idx + 1].strip("'\"")
+                idx += 2
+            elif arg == "-type" and idx + 1 < len(args):
+                type_filter = args[idx + 1].lower()
+                idx += 2
+            else:
+                idx += 1
+
+        try:
+            start_node = self.vfs.resolve_path(start_path)
+        except Exception:
+            return CommandResult(stderr=f"find: '{start_path}': No such file or directory\n", exit_code=1)
+
+        results: List[str] = []
+
+        def _traverse(node: FSNode, current_display: str) -> None:
+            matches_name = fnmatch.fnmatch(node.name, name_pattern) or (name_pattern == "*" and not node.name)
+            matches_type = True
+            if type_filter == "f":
+                matches_type = not node.is_directory
+            elif type_filter == "d":
+                matches_type = node.is_directory
+
+            if matches_name and matches_type and current_display:
+                results.append(current_display)
+
+            if isinstance(node, DirectoryNode):
+                for child_name, child in sorted(node.children.items()):
+                    child_display = posixpath.join(current_display, child_name) if current_display != "/" else f"/{child_name}"
+                    _traverse(child, child_display)
+
+        base_display = start_path if start_path != "." else "."
+        _traverse(start_node, base_display)
+
+        output = "\n".join(results) + ("\n" if results else "")
+        return CommandResult(stdout=output, exit_code=0)
+
+    def man(self, args: Sequence[str], stdin: str = "") -> CommandResult:
+        if not args:
+            return CommandResult(
+                stdout="What manual page do you want?\nFor example, try 'man ls', 'man grep', or 'man find'.\n",
+                exit_code=0,
+            )
+        from cybershell.tools.codex import format_man_page
+        text = format_man_page(args[0])
+        return CommandResult(stdout=text + "\n", exit_code=0)
+
+    def lookup(self, args: Sequence[str], stdin: str = "") -> CommandResult:
+        return self.man(args, stdin)
+
+    def help(self, args: Sequence[str], stdin: str = "") -> CommandResult:
+        if args:
+            return self.man(args, stdin)
+        commands = sorted(self._commands.keys())
+        lines = [
+            "🌱 BYTE'S LINUX COMMAND GUIDE",
+            "Available commands:",
+            f"  {', '.join(commands[:11])}",
+            f"  {', '.join(commands[11:])}",
+            "",
+            "Helpful Tools:",
+            "  man <cmd>     - Short friendly guide for a command (e.g. 'man ls')",
+            "  ? / hint      - Friendly hints for your current objective",
+            "  map           - Show your adventure progress across all 15 levels",
+            "  clear         - Clear the screen",
+            "",
+            "Explore freely! Mistakes are completely okay and safe 🌱",
+        ]
+        return CommandResult(stdout="\n".join(lines) + "\n", exit_code=0)
