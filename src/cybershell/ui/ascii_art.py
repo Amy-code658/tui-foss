@@ -53,7 +53,7 @@ ADVENTURE_LOGO: str = """  ____  _   _ _____ _____ _ ____    _     ___ _   _ _  
      / ___ \\| |_| |\\ V / | |___| |\\  | | | | |_| |  _ <| |___ 
     /_/   \\_\\____/  \\_/  |_____|_| \\_| |_|  \\___/|_| \\_\\_____|"""
 
-ADVENTURE_LOGO_COMPACT: str = r"""[ 🌱 BYTE'S LINUX ADVENTURE • A FRIENDLY TERMINAL JOURNEY 🌱 ]"""
+ADVENTURE_LOGO_COMPACT: str = r"""[ :: BYTE'S LINUX ADVENTURE • A TERMINAL JOURNEY :: ]"""
 
 # Preserved for backward compatibility
 CYBER_LOGO = ADVENTURE_LOGO
@@ -77,27 +77,27 @@ def get_logo(styled: bool = False, wide: bool = False) -> str:
 
 
 # =============================================================================
-# Friendly Mascot & Guide Illustrations
+# Mascot & Guide Illustrations (Clean ASCII)
 # =============================================================================
 
 FIELD_MANUAL_HEADER: str = r"""
-        📖  FIELD MANUAL & RULES  📖
+        [ FIELD MANUAL & RULES ]
              (\__/)
              (・ω・)  "Welcome to Linux!"
-            / >🌱
+            / >*
 """
 
 PORTRAIT_BYTE: List[str] = [
     r"     (\__/)     ",
     r"     (・ω・)      ",
-    r"    / >🌱        ",
+    r"    / >*        ",
     r"   (  Byte  )   ",
     r"    '------'    ",
 ]
 
 PORTRAIT_FERN: List[str] = [
     r"     .-''''-.   ",
-    r"    /  🌿    \   ",
+    r"    /  *    \   ",
     r"   |  (^‿^)  |  ",
     r"   (  Fern  )   ",
     r"    '------'    ",
@@ -105,7 +105,7 @@ PORTRAIT_FERN: List[str] = [
 
 PORTRAIT_PENNY: List[str] = [
     r"     .------.   ",
-    r"    /  [👓]  \   ",
+    r"    /  [oo] \   ",
     r"   |  (•‿•)  |  ",
     r"   ( Penny  )   ",
     r"    '------'    ",
@@ -113,7 +113,7 @@ PORTRAIT_PENNY: List[str] = [
 
 PORTRAIT_NOVA: List[str] = [
     r"     .------.   ",
-    r"    /  ⭐    \   ",
+    r"    /  *    \   ",
     r"   |  (★‿★)  |  ",
     r"   (  Nova  )   ",
     r"    '------'    ",
@@ -187,14 +187,14 @@ def get_access_granted_banner(
 
     lines = [
         b_top,
-        f"│{f'🎉 OBJECTIVE COMPLETE! 🎉':^{inner}}│",
+        f"│{f'[+] OBJECTIVE COMPLETE':^{inner}}│",
         f"│{title[:inner - 2]:^{inner}}│",
-        f"│{f'+{xp_awarded} XP ⭐':^{inner}}│",
+        f"│{f'+{xp_awarded} XP':^{inner}}│",
     ]
     if streak > 1:
-        lines.append(f"│{f'Streak: {streak} in a row! 🌱':^{inner}}│")
+        lines.append(f"│{f'Streak: {streak} in a row':^{inner}}│")
     if badge:
-        lines.append(f"│{f'New Badge: [{badge}] 🏆':^{inner}}│")
+        lines.append(f"│{f'New Badge: [{badge}]':^{inner}}│")
     lines.append(b_bot)
 
     plain = "\n".join(lines)
@@ -216,7 +216,7 @@ def get_level_unlocked_banner(
     b_bot = f"╰{'─' * inner}╯"
     lines = [
         b_top,
-        f"│{f'🌱 LEVEL {sector_num:02d} UNLOCKED':^{inner}}│",
+        f"│{f'[+] LEVEL {sector_num:02d} UNLOCKED':^{inner}}│",
         f"│{sector_name.title():^{inner}}│",
         b_bot,
     ]
@@ -228,17 +228,17 @@ def get_level_unlocked_banner(
 
 VICTORY_BANNER: str = """╭──────────────────────────────────────────────────────────────╮
 │                                                              │
-│              🎉  ADVENTURE COMPLETE!  🎉                     │
+│                 [ ADVENTURE COMPLETE ]                       │
 │                                                              │
 │           You explored all 15 Linux worlds and               │
-│               solved every puzzle! Great job! 🌱             │
+│               solved every puzzle! Great job!                │
 │                                                              │
-│                  🏆 MASTER EXPLORER 🏆                       │
+│                  [ MASTER EXPLORER ]                         │
 ╰──────────────────────────────────────────────────────────────╯"""
 
 # Backward compatibility stub
 DEFEAT_BANNER: str = """╭──────────────────────────────────────────────────────────────╮
-│                  Let's take a quick breath 🙂                │
+│                  Let's take a quick breath :)                │
 │                 Mistakes are a great way to learn!           │
 ╰──────────────────────────────────────────────────────────────╯"""
 

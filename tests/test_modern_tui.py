@@ -1,12 +1,16 @@
-"""Tests for CyberShell RPG Modern TUI Engine (Theme, Animations, and Components)."""
-
 from __future__ import annotations
 
 import io
 import math
+import os
 import sys
 import unittest
 from unittest.mock import patch
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
 from cybershell.ui.animation import (
     CelebrationEffect,
@@ -21,9 +25,15 @@ from cybershell.ui.animation import (
 from cybershell.ui.renderer import (
     draw_breadcrumb,
     draw_floating_modal,
+    draw_overthewire_card,
     draw_progress_bar,
     draw_statusline,
     visual_len,
+)
+from cybershell.ui.search import (
+    fuzzy_score,
+    fuzzy_search_commands,
+    render_telescope_results,
 )
 from cybershell.ui.theme import (
     BOLD,
@@ -265,6 +275,128 @@ class TestModernRenderComponents(unittest.TestCase):
 
         bar_styled = draw_progress_bar(current=3, total=10, width=10, styled=True)
         self.assertEqual(visual_len(bar_styled), 10)
+
+
+class TestFuzzySearch(unittest.TestCase):
+    """Verify subsequence fuzzy score, ranked command search, and Telescope UI rendering."""
+
+    def test_fuzzy_score_exact_match(self) -> None:
+        matched, score = fuzzy_score("grep", "grep")
+        self.assertTrue(matched)
+        self.assertEqual(score, 1000)
+
+    def test_fuzzy_score_substring_prefix(self) -> None:
+        matched, score = fuzzy_score("gre", "grep")
+        self.assertTrue(matched)
+        self.assertGreater(score, 500)
+
+    def test_fuzzy_score_subsequence(self) -> None:
+        matched, score = fuzzy_score("gp", "grep")
+        self.assertTrue(matched)
+        self.assertGreater(score, 0)
+
+    def test_fuzzy_score_no_match(self) -> None:
+        matched, score = fuzzy_score("xyz", "grep")
+        self.assertFalse(matched)
+        self.assertEqual(score, 0)
+
+    def test_fuzzy_score_empty_pattern(self) -> None:
+        matched, score = fuzzy_score("", "grep")
+        self.assertTrue(matched)
+
+    def test_fuzzy_search_commands_ranking(self) -> None:
+        commands = [
+            {"name": "grep", "description": "Search text patterns using regex", "flags": {"-r": "Recursive"}},
+            {"name": "find", "description": "Search files in a directory hierarchy", "flags": {"-name": "Name pattern"}},
+            {"name": "cat", "description": "Concatenate files and print on stdout"},
+            {"name": "ls", "description": "List directory contents"},
+        ]
+
+        # Searching 'grep' should rank grep first
+        results = fuzzy_search_commands("grep", commands)
+        self.assertGreaterEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "grep")
+
+        # Searching 'search' should match both grep and find by description
+        results_desc = fuzzy_search_commands("search", commands)
+        matched_names = [r["name"] for r in results_desc]
+        self.assertIn("grep", matched_names)
+        self.assertIn("find", matched_names)
+
+        # Empty query returns original commands up to limit
+        all_results = fuzzy_search_commands("", commands, limit=2)
+        self.assertEqual(len(all_results), 2)
+
+    def test_render_telescope_results(self) -> None:
+        sample_results = [
+            {"name": "grep", "description": "Print lines matching a pattern"},
+            {"name": "find", "description": "Search for files in a directory"},
+        ]
+        lines = render_telescope_results("gr", sample_results, width=76, styled=True)
+        self.assertGreater(len(lines), 4)
+
+        # First line should be top border
+        self.assertTrue(lines[0].startswith("\033[") or lines[0].startswith("╭"))
+
+        # Telescope header should be present
+        combined = "\n".join(lines)
+        self.assertIn("TELESCOPE", combined)
+        self.assertIn("grep", combined)
+        self.assertIn("find", combined)
+
+        # Width containment test
+        for line in lines:
+            self.assertLessEqual(visual_len(line), 76)
+
+        # Empty results handling
+        empty_lines = render_telescope_results("nonexistent", [], width=70, styled=False)
+        empty_combined = "\n".join(empty_lines)
+        self.assertIn("No matching commands found", empty_combined)
+        for line in empty_lines:
+            self.assertLessEqual(visual_len(line), 70)
+
+
+class TestOverTheWireBriefing(unittest.TestCase):
+    """Verify OverTheWire Bandit style wargame mission briefing cards."""
+
+    def test_draw_overthewire_card_contents(self) -> None:
+        card = draw_overthewire_card(
+            sector_id=0,
+            sector_name="Filesystem Basics",
+            target_text="Find the hidden flag in the current directory.",
+            scenario="A secret token was left behind by the prior admin.",
+            suggested_commands=["pwd", "ls", "cat"],
+            current_hint="Use ls -la to reveal hidden files.",
+            width=80,
+            styled=False,
+        )
+        self.assertIn("LEVEL 01", card)
+        self.assertIn("FILESYSTEM BASICS", card)
+        self.assertIn("TARGET   :", card)
+        self.assertIn("SCENARIO :", card)
+        self.assertIn("COMMANDS :", card)
+        self.assertIn("pwd, ls, cat", card)
+        self.assertIn("HINT     :", card)
+        self.assertIn("Use ls -la", card)
+
+        # Verify no ABCD multiple-choice options are rendered
+        self.assertNotIn("[A]", card)
+        self.assertNotIn("[B]", card)
+        self.assertNotIn("[C]", card)
+        self.assertNotIn("[D]", card)
+
+    def test_draw_overthewire_card_width_containment(self) -> None:
+        card_styled = draw_overthewire_card(
+            sector_id=2,
+            sector_name="Permissions & Ownership",
+            target_text="Gain read access to the encrypted payload in /secure/vault.",
+            scenario="File permissions are restricted to user root:root.",
+            suggested_commands=["chmod", "chown", "sudo"],
+            width=80,
+            styled=True,
+        )
+        for line in card_styled.splitlines():
+            self.assertLessEqual(visual_len(line), 80, f"Line exceeded width 80: {line}")
 
 
 if __name__ == "__main__":

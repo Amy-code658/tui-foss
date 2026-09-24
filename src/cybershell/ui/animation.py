@@ -139,7 +139,7 @@ class CelebrationEffect:
         border_bot = "╰" + "─" * (len(title) + 16) + "╯"
         s3 = [
             styled(border_top, fg=HEX_YELLOW).center(width),
-            styled(f"│  ✨  {title}  ✨  │", fg=HEX_GREEN, bold=True).center(width),
+            styled(f"│  ✦  {title}  ✦  │", fg=HEX_GREEN, bold=True).center(width),
             styled(f"│      {subtitle}      │", fg=HEX_CYAN).center(width),
             styled(border_bot, fg=HEX_YELLOW).center(width),
         ]
@@ -165,7 +165,7 @@ class CelebrationEffect:
         border = "─" * (min(width - 6, max(36, visual_len(title) + 12)))
         card = [
             styled(f"╭{border}╮", fg=HEX_YELLOW).center(width),
-            styled(f"│   ✨  {title}  ✨   │", fg=HEX_GREEN, bold=True).center(width),
+            styled(f"│   ✦  {title}  ✦   │", fg=HEX_GREEN, bold=True).center(width),
             styled(f"│       {subtitle}       │", fg=HEX_CYAN).center(width),
             styled(f"╰{border}╯", fg=HEX_YELLOW).center(width),
         ]
