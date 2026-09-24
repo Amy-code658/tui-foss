@@ -371,7 +371,7 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         from cybershell.ui.ascii_art import get_foss_penguin
         penguin = get_foss_penguin(styled=False)
         self.assertTrue(len(penguin.splitlines()) >= 5)
-        self.assertIn("o_o", penguin)
+        self.assertIn("(o o)", penguin)
 
     def test_foss_penguin_frames_and_welcome(self) -> None:
         from cybershell.ui.ascii_art import get_foss_penguin
@@ -384,10 +384,10 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         p_wave = get_foss_penguin(styled=False, frame="wave")
         p_happy = get_foss_penguin(styled=False, frame="happy")
         
-        self.assertIn("o_o", p_normal)
+        self.assertIn("(o o)", p_normal)
         self.assertIn("- -", p_blink)
-        self.assertIn("o_o", p_wave)
-        self.assertIn("^_^", p_happy)
+        self.assertIn("(o o)", p_wave)
+        self.assertIn("(^ ^)", p_happy)
         
         # Non-interactive executions (must not raise or block)
         from unittest.mock import patch

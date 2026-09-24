@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import sys
 import textwrap
 import unicodedata
 from typing import Iterable, List, Optional, Tuple
@@ -960,3 +961,54 @@ def draw_floating_modal(
         return "\n".join(shadow_rows)
 
     return "\n".join(rows)
+
+
+def wait_for_enter_or_esc(prompt: str = "") -> str:
+    """Wait for user to press Enter, Space, or Esc. Returns 'esc' or 'enter'."""
+    import builtins
+    if (
+        hasattr(builtins.input, "mock_calls")
+        or type(builtins.input).__name__ in ("MagicMock", "Mock")
+        or not sys.stdin.isatty()
+    ):
+        if prompt:
+            sys.stdout.write(prompt)
+            sys.stdout.flush()
+        try:
+            val = input().strip().lower()
+            if val in ("esc", "escape", "q", "exit", "\x1b"):
+                return "esc"
+            return "enter"
+        except (KeyboardInterrupt, EOFError):
+            return "esc"
+    try:
+        import termios
+        import tty
+        import select
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+            if ch == "\x1b":
+                r, _, _ = select.select([sys.stdin], [], [], 0.06)
+                if r:
+                    sys.stdin.read(2)
+                return "esc"
+            elif ch in ("\r", "\n", " ", "q", "Q"):
+                return "enter"
+            elif ch == "\x03":  # Ctrl+C
+                raise KeyboardInterrupt
+            elif ch == "\x04":  # Ctrl+D
+                raise EOFError
+            return "enter"
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    except (KeyboardInterrupt, EOFError):
+        raise
+    except Exception:
+        try:
+            val = input().strip().lower()
+            return "esc" if val in ("esc", "escape", "q", "\x1b") else "enter"
+        except Exception:
+            return "esc"

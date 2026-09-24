@@ -98,18 +98,6 @@ PALETTE_ACTIONS = [
         "detail": "Toggle ASCII companion Byte on/off",
     },
     {
-        "id": "toggle_rain",
-        "key": "8",
-        "title": "Toggle Background Rain",
-        "detail": "Toggle ambient matrix rain effect",
-    },
-    {
-        "id": "toggle_anim",
-        "key": "9",
-        "title": "Toggle Calm Animations",
-        "detail": "Toggle subtle breathing/pulse indicator",
-    },
-    {
         "id": "chmod_decoder",
         "key": "C",
         "title": "Chmod Permission Decoder",
@@ -119,7 +107,7 @@ PALETTE_ACTIONS = [
         "id": "theme_selector",
         "key": "T",
         "title": "Color Theme Selector",
-        "detail": "FOSS, Tokyo Night, Dracula, Catppuccin, Nord, etc. (13 themes)",
+        "detail": "FOSS, Tokyo Night, Dracula, Catppuccin, Nord, etc. (18 themes)",
     },
     {
         "id": "settings",
@@ -143,7 +131,6 @@ def render_command_center(
 
     theme = get_active_theme()
     pet = get_terminal_pet()
-    ambience = get_ambience_manager()
 
     b_col = theme.fg_blue if styled else ""
     b_rst = RESET if styled else ""
@@ -168,12 +155,10 @@ def render_command_center(
 
     # Sub-status bar with live theme colors
     pet_status = f"{theme.fg_green}ON{RESET}" if pet.enabled else f"{theme.fg_muted}OFF{RESET}"
-    rain_status = f"{theme.fg_cyan}ON{RESET}" if ambience.rain_enabled else f"{theme.fg_muted}OFF{RESET}"
-    anim_status = f"{theme.fg_yellow}ON{RESET}" if ambience.calm_animations else f"{theme.fg_muted}OFF{RESET}"
     if styled:
-        status_bar = f"Theme: {BOLD}{theme.fg_purple}{theme.display_name}{RESET} | Pet: {pet_status} | Rain: {rain_status} | Anim: {anim_status}"
+        status_bar = f"Theme: {BOLD}{theme.fg_purple}{theme.display_name}{RESET} | Pet: {pet_status}"
     else:
-        status_bar = f"Theme: {theme.display_name} | Pet: {'ON' if pet.enabled else 'OFF'} | Rain: {'ON' if ambience.rain_enabled else 'OFF'} | Anim: {'ON' if ambience.calm_animations else 'OFF'}"
+        status_bar = f"Theme: {theme.display_name} | Pet: {'ON' if pet.enabled else 'OFF'}"
     add_line(f"{status_bar.center(content_w)}")
     add_line("")
 
@@ -305,10 +290,10 @@ def run_command_center(
         except (KeyboardInterrupt, EOFError):
             return None
 
-        if not choice or choice in ("0", "q", "exit", "quit", "back"):
+        choice_lower = choice.lower()
+        if not choice or choice_lower in ("0", "q", "exit", "quit", "back", "esc", "escape", "\x1b"):
             return None
 
-        choice_lower = choice.lower()
         if choice_lower in (":cmd", "cmd", "\x00", "\x00\x00"):
             continue
 
@@ -340,18 +325,6 @@ def run_command_center(
             status_banner = f"[✓] Terminal Pet Byte is now {'ON' if new_s else 'OFF'}."
             continue
 
-        if choice in ("8",) or "rain" in choice_lower:
-            ambience = get_ambience_manager()
-            new_r = ambience.toggle_rain()
-            status_banner = f"[✓] Background Rain effect is now {'ON' if new_r else 'OFF'}."
-            continue
-
-        if choice in ("9",) or "anim" in choice_lower:
-            ambience = get_ambience_manager()
-            new_a = ambience.toggle_calm_animations()
-            status_banner = f"[✓] Calm Animations are now {'ON' if new_a else 'OFF'}."
-            continue
-
         if choice_lower in ("t", "theme", "themes", "color"):
             run_theme_selector(width=width)
             current_t = get_active_theme()
@@ -367,4 +340,4 @@ def run_command_center(
             run_settings_view(player, width=width)
             continue
 
-        status_banner = f"[!] Unknown command '{choice}'. Enter 1-9, C, T, S, or 0."
+        status_banner = f"[!] Unknown command '{choice}'. Enter 1-7, C, T, S, or Esc/0 to close."

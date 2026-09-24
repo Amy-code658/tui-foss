@@ -99,6 +99,7 @@ from cybershell.ui.renderer import (
     pad_to_width,
     terminal_size,
     visual_len,
+    wait_for_enter_or_esc,
 )
 from cybershell.ui.search import fuzzy_search_commands, render_telescope_results
 from cybershell.ui.rpg_app import RPGApp
@@ -556,15 +557,18 @@ class VFSTabCompleter:
 
 
 def configure_readline_bindings() -> None:
-    """Register readline shortcuts, enabling Ctrl+Space & Ctrl+P for Command Center."""
+    """Register readline shortcuts, enabling Ctrl+Space, Ctrl+P, and Esc."""
     if not READLINE_AVAILABLE or readline is None:
         return
     bindings = [
+        'set keyseq-timeout 100',
         r'"\C-@": "\C-u:cmd\n"',        # Ctrl+Space (standard NUL \x00 in Linux terminals)
         r'"\C- ": "\C-u:cmd\n"',        # Ctrl+Space alternative readline syntax
         r'"\C-p": "\C-u:cmd\n"',        # Ctrl+P (Neovim / VSCode palette fallback)
         r'"\e[32;5u": "\C-u:cmd\n"',    # CSI u keyboard protocol for Ctrl+Space
         r'"\e[27;5;32~": "\C-u:cmd\n"', # Xterm modifyOtherKeys for Ctrl+Space
+        r'"\e": "\C-uexit\n"',          # Esc key to exit back to menu
+        r'"\e\e": "\C-uexit\n"',        # Double-Esc to exit
     ]
     for b in bindings:
         try:
@@ -692,12 +696,18 @@ def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer") ->
     if not sys.stdin.isatty():
         return current_name if current_name else "Explorer"
 
+    term_w, term_h = terminal_size()
     term_w = max(40, width)
-    box_w = max(44, min(term_w - 4, 76))
+    box_w = max(44, min(term_w - 4, 74))
     inner_w = box_w - 4
     theme = get_active_theme()
 
     sys.stdout.write("\033[H\033[J")
+    # Vertical centering for spacious terminals
+    top_margin = max(0, (term_h - 28) // 2)
+    if top_margin > 0:
+        sys.stdout.write("\n" * top_margin)
+
     tux_raw = get_foss_penguin(styled=True, frame="wave")
     for line in tux_raw.splitlines():
         print(pad_to_width(line, term_w, align="center"))
@@ -729,11 +739,9 @@ def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer") ->
     print(pad_to_width(bot_border, term_w, align="center"))
     print()
 
-    indent = " " * max(2, (term_w - box_w) // 2)
-    if current_name and current_name != "Explorer":
-        sys.stdout.write(f"{indent}{BOLD}{theme.fg_cyan}Enter your name (press [ENTER] for {current_name}, or type new name): {RESET}")
-    else:
-        sys.stdout.write(f"{indent}{BOLD}{theme.fg_cyan}Enter your name (default: Explorer): {RESET}")
+    prompt_msg = f"Enter your name (press [ENTER] for {current_name}, or type new name): " if (current_name and current_name != "Explorer") else "Enter your name (default: Explorer): "
+    indent_pad = max(0, (term_w - box_w) // 2 + 2)
+    sys.stdout.write(f"{' ' * indent_pad}{BOLD}{theme.fg_cyan}{prompt_msg}{RESET}")
     sys.stdout.flush()
 
     try:
@@ -747,14 +755,14 @@ def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer") ->
     clean_name = clean_name[:16]
 
     sys.stdout.write("\033[H\033[J")
+    if top_margin > 0:
+        sys.stdout.write("\n" * top_margin)
     tux_happy = get_foss_penguin(styled=True, frame="happy")
     for line in tux_happy.splitlines():
         print(pad_to_width(line, term_w, align="center"))
     print()
     print(pad_to_width(f"{BOLD}{theme.fg_green}[✓] Welcome aboard, {clean_name}! Tux is excited to train with you.{RESET}", term_w, align="center"))
     print(pad_to_width(f"{theme.fg_muted}Initializing your personal Linux sandbox...{RESET}", term_w, align="center"))
-    if sys.stdout.isatty():
-        time.sleep(0.4)
     return clean_name
 
 
@@ -764,49 +772,34 @@ def render_opening_screen(
     cadet_mode: bool = True,
     has_save: bool = False,
 ) -> str:
-    """Render the primary adventure opening screen with clean web-app aesthetics."""
+    """Render the primary adventure opening screen with clean, centralized web-app aesthetics."""
     term_w = max(40, width)
-    card_w = max(44, min(term_w - 2, 78))
+    card_w = min(max(44, term_w - 4), 74)
+    theme = get_active_theme()
 
-    # 1. FOSS Penguin Tux & Title Logo
+    # 1. FOSS Penguin Tux (Larry Ewing authentic art)
     penguin_raw = get_foss_penguin(styled=True, frame="normal")
     penguin_lines = [
         pad_to_width(line, term_w, align="center")
         for line in penguin_raw.splitlines()
     ]
 
-    logo_raw = get_logo(styled=True)
-    logo_lines = [
-        pad_to_width(line, term_w, align="center")
-        for line in logo_raw.strip("\n").splitlines()
-    ]
-
     # 2. Player summary line
     total_levels = 15
     curr_lvl = min(total_levels, player.current_sector + 1)
-    status_text_1 = (
-        f"{CYAN}Explorer:{RESET} {WHITE}{BOLD}{player.character_name}{RESET}  |  "
-        f"{YELLOW}Progress:{RESET} Level {curr_lvl}/{total_levels}  |  "
-        f"{YELLOW}{player.xp} XP{RESET}  |  "
-        f"{MAGENTA}Badges: {len(getattr(player, 'badges', []))}{RESET}"
+    title_line = pad_to_width(f"{BOLD}{theme.fg_cyan}BYTE'S LINUX ADVENTURE  •  FOSS CYBERSHELL{RESET}", term_w, align="center")
+    status_text = (
+        f"{theme.fg_muted}Explorer: {BOLD}{theme.fg_white}{player.character_name}{RESET}  │  "
+        f"Progress: {BOLD}{theme.fg_yellow}Level {curr_lvl}/{total_levels}{RESET}  │  "
+        f"XP: {BOLD}{theme.fg_yellow}{player.xp}{RESET}"
     )
-    status_line_1 = pad_to_width(status_text_1, term_w, align="center")
+    status_line = pad_to_width(status_text, term_w, align="center")
 
-    # 3. System Highlights (Concise 3-line web-card overview instead of overwhelming 14-line box)
+    # 3. Main Directory Menu Layout
     from cybershell.ui.renderer import draw_panel
     from cybershell.ui.theme import fg_hex
 
-    func_title = "FOSS CYBERSHELL // SYSTEM HIGHLIGHTS"
-    func_content = [
-        f"  {CYAN}Shell Missions{RESET} (15 OverTheWire-style challenges) • {YELLOW}Fuzzy Docs{RESET} ('search <query>')",
-        f"  {GREEN}Command Center{RESET} (Ctrl+Space or ':cmd') • {MAGENTA}Chmod Decoder{RESET} ('chmod 755')",
-        f"  {BLUE}Arcade Dojo{RESET} (Snake, Vim, Typing) • {CYAN}Tux Penguin Pet{RESET} • {YELLOW}18 Color Themes{RESET}",
-    ]
-    func_panel_lines = draw_panel(func_title, func_content, card_w, styled=True, border_color=fg_hex(HEX_BLUE))
-
-    # 4. Minimal Boxy Menu Layout
     menu_title = "MAIN DIRECTORY • CHOOSE A DESTINATION"
-    th = get_active_theme()
 
     if has_save:
         options = [
@@ -818,8 +811,8 @@ def render_opening_screen(
             ("6", "Chmod Perm Decoder", "Decode permissions & solve security doors"),
             ("7", "Arcade Mini-Games", "Terminal Snake, Vim Dojo, Typing Dojo"),
             ("8", "Field Manual & Rules", "Read the adventure manual & rules"),
-            ("T", "Theme Selector", f"Active: {th.display_name} (type 'foss', 'sakura', etc.)"),
-            ("0", "Exit Adventure", "Save and exit"),
+            ("T", "Theme Selector", f"Active: {theme.display_name} (type 'foss', 'sakura', etc.)"),
+            ("0", "Exit Adventure", "Exit the game (or press ESC)"),
         ]
     else:
         options = [
@@ -830,8 +823,8 @@ def render_opening_screen(
             ("5", "Chmod Perm Decoder", "Decode permissions & solve security doors"),
             ("6", "Arcade Mini-Games", "Terminal Snake, Vim Dojo, Typing Dojo"),
             ("7", "Field Manual & Rules", "Read the adventure manual & rules"),
-            ("T", "Theme Selector", f"Active: {th.display_name} (type 'foss', 'sakura', etc.)"),
-            ("0", "Exit Adventure", "Exit the game"),
+            ("T", "Theme Selector", f"Active: {theme.display_name} (type 'foss', 'sakura', etc.)"),
+            ("0", "Exit Adventure", "Exit the game (or press ESC)"),
         ]
 
     menu_content = []
@@ -842,18 +835,14 @@ def render_opening_screen(
         prefix = f"{pill(num, HEX_BG_DARK, c)}  {CYAN}{BOLD}{label:<22}{RESET}"
         menu_content.append(f"  {prefix} {WHITE}{summary}{RESET}")
     menu_content.append("")
-    menu_content.append(f"  {BOLD}{th.fg_yellow}Pro-tip:{RESET} {th.fg_white}Type any theme name directly (e.g. 'foss', 'sakura', 'mint', 'dracula') to switch instantly!{RESET}")
+    menu_content.append(f"  {BOLD}{theme.fg_yellow}Pro-tip:{RESET} {theme.fg_white}Type any theme name directly (e.g. 'foss', 'sakura', 'mint', 'dracula') to switch instantly!{RESET}")
     menu_content.append("")
 
     menu_panel_lines = draw_panel(menu_title, menu_content, card_w, styled=True, border_color=fg_hex(HEX_PURPLE))
 
     all_lines = (
         penguin_lines
-        + [""]
-        + logo_lines
-        + ["", status_line_1, ""]
-        + [pad_to_width(line, term_w, align="center") for line in func_panel_lines]
-        + [""]
+        + ["", title_line, status_line, ""]
         + [pad_to_width(line, term_w, align="center") for line in menu_panel_lines]
         + [""]
     )
@@ -917,12 +906,12 @@ def view_codex(codex: Codex, player: PlayerStats, width: int) -> None:
         print(f"  {DIM}{'─' * card_w}{RESET}")
         try:
             term = input(
-                f"  {YELLOW}Enter command or keyword (or press Enter / '0' to return to menu): {RESET}"
+                f"  {YELLOW}Enter command or keyword (or press Enter / '0' / ESC to return): {RESET}"
             ).strip()
         except (KeyboardInterrupt, EOFError):
             break
 
-        if not term or term in ("0", "q", "quit", "exit", "back", "menu"):
+        if not term or term.lower() in ("0", "q", "quit", "exit", "back", "menu", "esc", "escape", "\x1b"):
             break
 
         entry_text = codex.display_command(term)
@@ -946,9 +935,8 @@ def view_codex(codex: Codex, player: PlayerStats, width: int) -> None:
             else:
                 print(f"\n  {RED}No commands matching '{term}' found. Try 'ls', 'cat', or 'grep'!{RESET}")
 
-        try:
-            input(f"\n  {YELLOW}Press Enter to return to command list...{RESET}")
-        except (KeyboardInterrupt, EOFError):
+        key = wait_for_enter_or_esc(f"\n  {YELLOW}Press Enter or ESC to return to command list...{RESET}")
+        if key == "esc":
             break
 
 
@@ -990,10 +978,7 @@ def view_inventory(player: PlayerStats, width: int) -> None:
             print(f"    [*] {b}")
 
     print(f"\n  {DIM}{'─' * card_w}{RESET}")
-    try:
-        input(f"  {YELLOW}Press Enter to return to Main Menu...{RESET}")
-    except (KeyboardInterrupt, EOFError):
-        pass
+    wait_for_enter_or_esc(f"  {YELLOW}Press Enter or ESC to return to Main Menu...{RESET}")
 
 
 def view_map(mainframe: MainframeMap, player: PlayerStats, all_quests: Dict[int, Quest], width: int) -> None:
@@ -1015,10 +1000,7 @@ def view_map(mainframe: MainframeMap, player: PlayerStats, all_quests: Dict[int,
     for m_line in render_adventure_map(player, all_quests, width=card_w).splitlines():
         print(f"  {m_line}")
     print(f"\n  {DIM}{'─' * card_w}{RESET}")
-    try:
-        input(f"  {YELLOW}Press Enter to return to Main Menu...{RESET}")
-    except (KeyboardInterrupt, EOFError):
-        pass
+    wait_for_enter_or_esc(f"  {YELLOW}Press Enter or ESC to return to Main Menu...{RESET}")
 
 
 def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> None:
@@ -1193,15 +1175,15 @@ def view_field_manual(width: int) -> None:
             print(f"  {line}")
         print()
         if page == 1:
-            prompt = f"  {YELLOW}{BOLD}[ Enter: Next Page (Commands) | 0 or q: Main Menu ]{RESET} "
+            prompt = f"  {YELLOW}{BOLD}[ Enter: Next Page (Commands) | 0 / q / ESC: Main Menu ]{RESET} "
         else:
-            prompt = f"  {YELLOW}{BOLD}[ Enter: Main Menu | 1: Page 1 (Rules) | 0 or q: Main Menu ]{RESET} "
+            prompt = f"  {YELLOW}{BOLD}[ Enter: Main Menu | 1: Page 1 (Rules) | 0 / q / ESC: Main Menu ]{RESET} "
         try:
             choice = input(prompt).strip().lower()
         except (KeyboardInterrupt, EOFError):
             break
 
-        if choice in ("0", "q", "quit", "exit", "menu"):
+        if choice in ("0", "q", "quit", "exit", "menu", "esc", "escape", "\x1b"):
             break
         if page == 1:
             if choice in ("1",):
@@ -1462,12 +1444,8 @@ def interactive_game_loop(
         )
 
         footer = draw_control_footer(screen_type="terminal", width=width, styled=True)
-        if ambience.rain_enabled:
-            footer += f"  [{theme.fg_cyan}RAIN: ON{RESET}]"
 
         sys.stdout.write("\033[H\033[J")
-        if ambience.rain_enabled:
-            sys.stdout.write(ambience.render_rain_line(usable_w, density=0.08, color=theme.fg_cyan, row=0) + "\n")
         sys.stdout.write(layout + "\n")
         sys.stdout.write(pad_to_width(footer, usable_w, align="center") + "\n")
         sys.stdout.flush()
@@ -1480,8 +1458,7 @@ def interactive_game_loop(
         term_max_content = term_height - 3
         sliced_term = display_term_logs[-term_max_content:] if len(display_term_logs) > term_max_content else display_term_logs
         prompt_idx = len(sliced_term) - 1
-        rain_offset = 1 if ambience.rain_enabled else 0
-        prompt_row = rain_offset + task_height + 3 + prompt_idx
+        prompt_row = task_height + 3 + prompt_idx
         prompt_col = 3 + visual_len(active_prompt)
 
         try:
@@ -1501,12 +1478,8 @@ def interactive_game_loop(
 
         input_lower = user_input.lower()
 
-        # Return to main menu
-        if input_lower in ("0", "menu", "main", "back", "title"):
-            save_game(player, cadet_mode)
-            break
-
-        if input_lower in ("exit", "quit"):
+        # Return to main menu (support 'menu', 'exit', 'quit', '0', and 'esc')
+        if input_lower in ("0", "menu", "main", "back", "title", "exit", "quit", "esc", "escape", "\x1b", ":q", ":x"):
             save_game(player, cadet_mode)
             break
 
@@ -1552,18 +1525,6 @@ def interactive_game_loop(
             status_txt = "awake & active" if new_state else "resting"
             terminal_logs.append(f"{prompt_prefix} pet{RESET}")
             terminal_logs.append(f"{CYAN}[+] Terminal Pet Byte is now {status_txt}.{RESET}")
-            continue
-
-        if input_lower in (":rain", "rain"):
-            ambience = get_ambience_manager()
-            r_on = ambience.toggle_rain()
-            terminal_logs.append(f"{prompt_prefix} rain{RESET}")
-            terminal_logs.append(f"{CYAN}[+] Ambient rain effect is now {'ON' if r_on else 'OFF'} (light shaded).{RESET}")
-            continue
-
-        if input_lower in (":rain play", "rain watch", ":rain watch", "rain play"):
-            ambience = get_ambience_manager()
-            ambience.watch_falling_rain(width=usable_w, height=18, duration=2.5)
             continue
 
         if input_lower in (":chmod", ":perm", ":decoder"):
@@ -1908,84 +1869,28 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
         xp=player.xp,
     )
 
-    # First launch for this specific user shows onboarding animation & mandatory Field Manual!
     if first_launch:
         save_game(player, cadet_mode)
-        animate_tux_welcome(character_name=player.character_name, width=width, quick=False)
-        show_mandatory_field_manual(width)
-        interactive_game_loop(
-            character_name=player.character_name,
-            start_sector=0,
-            player=player,
-            vfs=vfs,
-            interpreter=interpreter,
-            evaluator=evaluator,
-            all_quests=all_quests,
-            app=app,
-            cadet_mode=cadet_mode,
-        )
-
-    # Initial startup splash prompt before revealing Tux penguin and menu
-    if sys.stdin.isatty():
-        width, _ = terminal_size()
-        sys.stdout.write("\033[H\033[J")
-        box_w = min(max(50, width - 4), 68)
-        inner_bw = box_w - 2
-        theme = get_active_theme()
-        b_col = theme.fg_blue
-        b_rst = RESET
-        top_b = f"{b_col}{PANEL_TOP_LEFT}{PANEL_HORIZONTAL * inner_bw}{PANEL_TOP_RIGHT}{b_rst}"
-        bot_b = f"{b_col}{PANEL_BOTTOM_LEFT}{PANEL_HORIZONTAL * inner_bw}{PANEL_BOTTOM_RIGHT}{b_rst}"
-        div_b = f"{b_col}{PANEL_DIVIDER_LEFT}{PANEL_HORIZONTAL * inner_bw}{PANEL_DIVIDER_RIGHT}{b_rst}"
-        side_b = f"{b_col}{PANEL_VERTICAL}{b_rst}"
-
-        def splash_row(txt: str = "") -> str:
-            pad = max(0, inner_bw - visual_len(txt) - 2)
-            return f"{side_b} {txt}{' ' * pad} {side_b}"
-
-        hero_name = player.character_name.upper() if player.character_name and player.character_name != "Byte" else "FOSS"
-        splash_lines = [
-            "",
-            top_b,
-            splash_row(f"{BOLD}{theme.fg_cyan}{f'{hero_name} LINUX ADVENTURE // FOSS EDITION'.center(inner_bw - 2)}{RESET}"),
-            div_b,
-            splash_row(""),
-            splash_row(f"{WHITE}{'Learn real-world Linux command mastery safely.'.center(inner_bw - 2)}{RESET}"),
-            splash_row(f"{DIM}{theme.fg_yellow}{'15 Quests • Real Shell • OverTheWire Style • Zero Damage'.center(inner_bw - 2)}{RESET}"),
-            splash_row(""),
-            splash_row(f"{BOLD}{YELLOW}{'Press [ENTER] to initialize FOSS CyberShell...'.center(inner_bw - 2)}{RESET}"),
-            splash_row(""),
-            bot_b,
-        ]
-        for s_l in splash_lines:
-            print(pad_to_width(s_l, width, align="center"))
-        print()
-        try:
-            splash_in = input().strip()
-            if splash_in:
-                s_cand = splash_in.lower()
-                for pfx in (":theme ", "theme ", ":theme", "theme"):
-                    if s_cand.startswith(pfx):
-                        s_cand = s_cand[len(pfx):].strip()
-                        break
-                all_theme_names = set(THEMES.keys()) | {t.display_name.lower() for t in THEMES.values()} | {"pastel", "lavender", "sakura", "mint", "peach", "catppuccin"}
-                if s_cand in all_theme_names or splash_in.lower() in all_theme_names:
-                    set_theme(s_cand if s_cand in all_theme_names else splash_in.lower())
-        except (KeyboardInterrupt, EOFError):
-            return
-
-        animate_tux_welcome(character_name=player.character_name, width=width, quick=True)
 
     while True:
         user_save = get_save_path(player.character_name)
-        has_save = os.path.isfile(user_save) or os.path.isfile(SAVE_FILE_PATH)
-        width, _ = terminal_size()
+        has_save = (os.path.isfile(user_save) or os.path.isfile(SAVE_FILE_PATH)) and (
+            player.current_sector > 0 or player.xp > 0 or len(player.completed_sectors) > 0
+        )
+        width, height = terminal_size()
         sys.stdout.write("\033[H\033[J")
+        top_margin = max(0, (height - 34) // 2)
+        if top_margin > 0:
+            sys.stdout.write("\n" * top_margin)
         print(render_opening_screen(player, width, cadet_mode=cadet_mode, has_save=has_save))
 
         max_option = 8 if has_save else 7
+        card_w = min(max(44, width - 4), 74)
+        indent_len = max(0, (width - card_w) // 2 + 2)
+        indent_str = " " * indent_len
+        prompt_text = f"Choose an option [0-{max_option}, T] (or ESC to exit, default: 1): "
         try:
-            choice = input(f"\n{YELLOW}Choose an option [0-{max_option}, T] (default: 1): {RESET}").strip()
+            choice = input(f"{indent_str}{YELLOW}{prompt_text}{RESET}").strip()
         except (KeyboardInterrupt, EOFError):
             print(f"\n{CYAN}See you next time! Session closed.{RESET}\n")
             break
@@ -1994,7 +1899,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
             choice = "1"
 
         choice_lower = choice.lower()
-        if choice_lower in ("0", "exit", "quit", "q"):
+        if choice_lower in ("0", "exit", "quit", "q", "esc", "escape", "\x1b"):
             print(f"\n{CYAN}See you next time! Session closed.{RESET}\n")
             break
 
@@ -2068,7 +1973,6 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                 interpreter = Interpreter(vfs=vfs)
                 all_quests = get_sector_quests()
                 save_game(player, cadet_mode)
-                animate_tux_welcome(character_name=player.character_name, width=width, quick=False)
                 show_mandatory_field_manual(width)
                 interactive_game_loop(
                     character_name=player.character_name,
