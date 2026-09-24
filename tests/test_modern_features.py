@@ -385,6 +385,8 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         p_happy = get_foss_penguin(styled=False, frame="happy")
         
         self.assertIn("(o o)", p_normal)
+        self.assertIn("(o o)", p_normal)  # eyes
+        self.assertIn("^^ ^^", p_normal)  # feet
         self.assertIn("- -", p_blink)
         self.assertIn("(o o)", p_wave)
         self.assertIn("(^ ^)", p_happy)

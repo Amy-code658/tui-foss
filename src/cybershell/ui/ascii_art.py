@@ -17,10 +17,10 @@ BOLD: str = "\033[1m"
 DIM: str = "\033[2m"
 
 # Soft, Warm Color Palette
-GREEN: str = "\033[92m"    # Sprout green 🌱
-YELLOW: str = "\033[93m"   # Warm star yellow ⭐ / hints 💡
+GREEN: str = "\033[92m"    # Sprout green
+YELLOW: str = "\033[93m"   # Warm star yellow / hints
 BLUE: str = "\033[94m"     # Soft sky blue
-MAGENTA: str = "\033[95m"  # Gentle lavender / badges 🏆
+MAGENTA: str = "\033[95m"  # Gentle lavender / badges
 CYAN: str = "\033[96m"     # Soft teal / water
 WHITE: str = "\033[97m"    # Clean text
 RED: str = "\033[91m"      # Soft alert (used sparingly)
@@ -42,16 +42,7 @@ def visual_len(text: str) -> int:
 # Friendly Adventure Logos
 # =============================================================================
 
-ADVENTURE_LOGO: str = """  ____  _   _ _____ _____ _ ____    _     ___ _   _ _   _ __  __ 
- | __ )| | | |_   _| ____( ) ___|  | |   |_ _| \\ | | | | \\ \\/ / 
- |  _ \\| |_| | | | |  _| |/\\___ \\  | |    | ||  \\| | | | |>  <  
- | |_) |\\__, | | | | |___   ___) | | |___ | || |\\  | |_| |/ . \\ 
- |____/ |___/  |_| |_____| |____/  |_____|___|_| \\_|\\___//_/ \\_\\
-        _    ______     _______ _   _ _____ _   _ ____  _____ 
-       / \\  |  _ \\ \\   / / ____| \\ | |_   _| | | |  _ \\| ____|
-      / _ \\ | | | \\ \\ / /|  _| |  \\| | | | | | | | |_) |  _|  
-     / ___ \\| |_| |\\ V / | |___| |\\  | | | | |_| |  _ <| |___ 
-    /_/   \\_\\____/  \\_/  |_____|_| \\_| |_|  \\___/|_| \\_\\_____|"""
+ADVENTURE_LOGO: str = """  ____  _   _ _____ _____ _ ____    _     ___ _   _ _   _ __  __ \n | __ )| | | |_   _| ____( ) ___|  | |   |_ _| \\ | | | | \\ \\\\/ / \n |  _ \\\\| |_| | | | |  _| |/\\___ \\  | |    | ||  \\\\| | | | |>  <  \n | |_) |\\\\__, | | | | |___   ___) | | |___ | || |\\\\  | |_| |/ . \\ \n |____/ |___/  |_| |_____| |____/  |_____|___|_| \\_|\\\\___//_/ \\_\\\\\n        _    ______     _______ _   _ _____ _   _ ____  _____ \n       / \\\\  |  _ \\ \\   / / ____| \\ | |_   _| | | |  _ \\\\| ____|\n      / _ \\ | | | \\ \\ / /|  _| |  \\\\| | | | | | | | |_) |  _|  \n     / ___ \\| |_| |\\ V / | |___| |\\\\  | | | | |_| |  _ <| |___ \n    /_/   \\_\\\\____/  \\_/  |_____|_| \\_| |_|  \\\\___/|_| \\_\\_____|\""""
 
 ADVENTURE_LOGO_COMPACT: str = r"""[ :: BYTE'S LINUX ADVENTURE • A TERMINAL JOURNEY :: ]"""
 
@@ -96,7 +87,7 @@ PORTRAIT_BYTE: List[str] = [
 ]
 
 PORTRAIT_FERN: List[str] = [
-    r"     .-''''-.   ",
+    r"     .------.   ",
     r"    /  *    \   ",
     r"   |  (^‿^)  |  ",
     r"   (  Fern  )   ",
@@ -268,29 +259,23 @@ def get_siren_banner(text: str = "", width: int = 76, styled: bool = False) -> s
     return ""
 
 
+# =============================================================================
+# FOSS Penguin Mascot
+# =============================================================================
+
 FOSS_PENGUIN: str = """\
-           .---.
-          /     \\
-         | (o o) |
-         |   ^   |
-         |  \\_/  |
-        /'-.....-'\\
-       / /|     |\\ \\
-      | | |     | | |
-      | | |     | | |
-       \\ \\|     |/ /
-        \\ \\_____/ /
-      .-'         '-.
-     /  /'-.   .-'\\  \\
-    (__(____) (____)__)"""
+         _~_
+        (o o)
+       /  V  \\
+      /(  _  )\\
+        ^^ ^^"""
 
 
 def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
-    """Return the iconic FOSS Tux penguin in ASCII art with light blue and yellow styling.
+    """Return the FOSS penguin ASCII art.
 
-    Directly modeled after Larry Ewing's official Tux penguin portrait with
-    dome head, expressive eyes, curved beak, flipper wings, plump white belly,
-    and wide splayed yellow webbed feet.
+    Simple cute penguin: dome _~_ head, round (o o) eyes, V beak,
+    belly body, and little ^^ ^^ feet.  Supports four animation frames.
 
     Args:
         styled: If True, apply theme ANSI colors.
@@ -299,71 +284,35 @@ def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
     if not styled:
         if frame == "wave":
             lines_raw = [
-                r"           .---.    /      ",
-                r"          /     \  //      ",
-                r"         | (o o) |//       ",
-                r"         |   ^   |         ",
-                r"         |  \_/  |         ",
-                r"        /'-.....-'\        ",
-                r"       / /|     |\ \       ",
-                r"      | | |     | | |      ",
-                r"      | | |     | | |      ",
-                r"       \ \|     |/ /       ",
-                r"        \ \_____/ /        ",
-                r"      .-'         '-.      ",
-                r"     /  /'-.   .-'\  \     ",
-                r"    (__(____) (____)__)    ",
+                r"         _~_    /   ",
+                r"        (o o)  //   ",
+                r"       /  V  |/     ",
+                r"      /(  _  )\     ",
+                r"        ^^ ^^       ",
             ]
         elif frame == "happy":
             lines_raw = [
-                r"           .---.           ",
-                r"          /     \          ",
-                r"         | (^ ^) |         ",
-                r"         |   ^   |         ",
-                r"         |  \_/  |         ",
-                r"        /'-.....-'\        ",
-                r"       / /|     |\ \       ",
-                r"      | | |     | | |      ",
-                r"      | | |     | | |      ",
-                r"       \ \|     |/ /       ",
-                r"        \ \_____/ /        ",
-                r"      .-'         '-.      ",
-                r"     /  /'-.   .-'\  \     ",
-                r"    (__(____) (____)__)    ",
+                r"         _~_        ",
+                r"        (^ ^)       ",
+                r"       /  V  \      ",
+                r"      /(  _  )\     ",
+                r"        ^^ ^^       ",
             ]
         elif frame == "blink":
             lines_raw = [
-                r"           .---.           ",
-                r"          /     \          ",
-                r"         | (- -) |         ",
-                r"         |   ^   |         ",
-                r"         |  \_/  |         ",
-                r"        /'-.....-'\        ",
-                r"       / /|     |\ \       ",
-                r"      | | |     | | |      ",
-                r"      | | |     | | |      ",
-                r"       \ \|     |/ /       ",
-                r"        \ \_____/ /        ",
-                r"      .-'         '-.      ",
-                r"     /  /'-.   .-'\  \     ",
-                r"    (__(____) (____)__)    ",
+                r"         _~_        ",
+                r"        (- -)       ",
+                r"       /  V  \      ",
+                r"      /(  _  )\     ",
+                r"        ^^ ^^       ",
             ]
         else:
             lines_raw = [
-                r"           .---.           ",
-                r"          /     \          ",
-                r"         | (o o) |         ",
-                r"         |   ^   |         ",
-                r"         |  \_/  |         ",
-                r"        /'-.....-'\        ",
-                r"       / /|     |\ \       ",
-                r"      | | |     | | |      ",
-                r"      | | |     | | |      ",
-                r"       \ \|     |/ /       ",
-                r"        \ \_____/ /        ",
-                r"      .-'         '-.      ",
-                r"     /  /'-.   .-'\  \     ",
-                r"    (__(____) (____)__)    ",
+                r"         _~_        ",
+                r"        (o o)       ",
+                r"       /  V  \      ",
+                r"      /(  _  )\     ",
+                r"        ^^ ^^       ",
             ]
         return "\n".join(lines_raw)
 
@@ -389,28 +338,19 @@ def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
         eye_str = f"{bld}{c_white}(o o){rst}"
 
     if frame == "wave":
-        h_line0 = f"           {c_blue}.---.    /{rst}      "
-        h_line1 = f"          {c_blue}/     \\  //{rst}      "
-        h_line2 = f"         {c_blue}|{rst} {eye_str} {c_blue}|//{rst}       "
+        lines = [
+            f"         {c_blue}_~_    /{rst}   ",
+            f"        {eye_str}  {c_blue}//{rst}   ",
+            f"       {c_blue}/  {bld}{c_yellow}V{rst}{c_blue}  |/{rst}     ",
+            f"      {c_blue}/(  {bld}{c_yellow}_{rst}{c_blue}  )\\{rst}     ",
+            f"        {bld}{c_yellow}^^ ^^{rst}       ",
+        ]
     else:
-        h_line0 = f"           {c_blue}.---.{rst}           "
-        h_line1 = f"          {c_blue}/     \\{rst}          "
-        h_line2 = f"         {c_blue}|{rst} {eye_str} {c_blue}|{rst}         "
-
-    lines = [
-        h_line0,
-        h_line1,
-        h_line2,
-        f"         {c_blue}|{rst}   {bld}{c_yellow}^{rst}   {c_blue}|{rst}         ",
-        f"         {c_blue}|{rst}  {bld}{c_yellow}\\_/{rst}  {c_blue}|{rst}         ",
-        f"        {c_blue}/'-.....-'\\{rst}        ",
-        f"       {c_blue}/ /{rst}{bld}{c_white}|     |{rst}{c_blue}\\ \\{rst}       ",
-        f"      {c_blue}| |{rst} {bld}{c_white}|     |{rst} {c_blue}| |{rst}      ",
-        f"      {c_blue}| |{rst} {bld}{c_white}|     |{rst} {c_blue}| |{rst}      ",
-        f"       {c_blue}\\ \\{rst}{bld}{c_white}|     |{rst}{c_blue}/ /{rst}       ",
-        f"        {c_blue}\\ \\{rst}{bld}{c_white}_____/{rst} {c_blue}/ /{rst}        ",
-        f"      {bld}{c_yellow}.-'{rst}         {bld}{c_yellow}'-.{rst}      ",
-        f"     {bld}{c_yellow}/  /'-.   .-'\\  \\{rst}     ",
-        f"    {bld}{c_yellow}(__(____) (____)__){rst}    ",
-    ]
+        lines = [
+            f"         {c_blue}_~_{rst}        ",
+            f"        {eye_str}       ",
+            f"       {c_blue}/  {bld}{c_yellow}V{rst}{c_blue}  \\{rst}      ",
+            f"      {c_blue}/(  {bld}{c_yellow}_{rst}{c_blue}  )\\{rst}     ",
+            f"        {bld}{c_yellow}^^ ^^{rst}       ",
+        ]
     return "\n".join(lines)
