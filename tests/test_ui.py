@@ -271,10 +271,10 @@ class TestRPGAppGauthamIntegration(unittest.TestCase):
         self.assertIn("🎯", self.app.ticker.active_message)
 
     def test_title_screen_contains_logo_and_navigation(self) -> None:
-        title = self.app.render_title(80)
-        self.assertIn("BYTE'S LINUX ADVENTURE", title)
+        title = strip_ansi(self.app.render_title(80))
+        self.assertIn("MAIN DIRECTORY", title)
         self.assertIn("____", title)
-        self.assertIn("[1] START ADVENTURE", title)
+        self.assertIn("1 \ue0b4  START ADVENTURE", title)
 
     def test_zero_layout_clipping_at_80_columns(self) -> None:
         """Strict check: every line rendered at 80 cols must NOT exceed 80 chars."""

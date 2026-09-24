@@ -13,6 +13,7 @@ import os
 import posixpath
 import sys
 import textwrap
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -89,11 +90,14 @@ from cybershell.ui.renderer import (
     draw_panel,
     draw_question_card,
     draw_split_panels,
+    draw_opencode_layout,
     pad_to_width,
     terminal_size,
     visual_len,
 )
 from cybershell.ui.rpg_app import RPGApp
+from cybershell.ui.animation import CelebrationEffect, ScreenTransition, Typewriter
+from cybershell.ui.theme import gradient_text, pill, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_BG_DARK, HEX_BLUE, FG_BORDER, RESET, BOLD
 
 
 def wrap_text(text: str, width: int, prefix: str = "", style: str = "") -> List[str]:
@@ -568,35 +572,8 @@ def render_opening_screen(
     )
     status_line_1 = pad_to_width(status_text_1, width, align="center")
 
-    border_double = f"{GREEN}{'═' * width}{RESET}"
-    border_single = f"{DIM}{'─' * width}{RESET}"
-
-    # 3. Friendly Description
-    about_title = f"{GREEN}{BOLD}[ 🌱 WELCOME TO BYTE'S LINUX ADVENTURE! 🌱 ]{RESET}"
-    desc_p1 = (
-        "Byte's Linux Adventure is a fun, chill, and friendly interactive terminal game "
-        "designed to help anyone learn real Linux command-line skills step-by-step."
-    )
-    desc_p2 = (
-        "Journey through 15 bite-sized levels: look around with pwd and ls, navigate folders with cd, "
-        "read files with cat, search with grep, manage permissions with chmod, and connect commands with pipes."
-    )
-    desc_p3 = (
-        "Mistakes deal ZERO damage and there are no penalties. Explore freely, try things out, "
-        "and learn at your own pace with friendly mascot Byte! (・ω・) 🌱"
-    )
-
-    about_lines = [
-        f"  {about_title}",
-        "",
-    ]
-    for p in (desc_p1, desc_p2, desc_p3):
-        for w_line in textwrap.wrap(p, width=inner_w):
-            about_lines.append(f"  {WHITE}{w_line}{RESET}")
-        about_lines.append("")
-
-    # 4. Navigation Options
-    menu_title = f"{YELLOW}{BOLD}[ MAIN DIRECTORY • CHOOSE A DESTINATION ]{RESET}"
+    # 3. Minimal Boxy Menu Layout
+    menu_title = "MAIN DIRECTORY • CHOOSE A DESTINATION"
 
     if has_save:
         options = [
@@ -620,21 +597,24 @@ def render_opening_screen(
             ("0", "Exit Adventure", "Exit the game"),
         ]
 
-    menu_lines = [
-        f"  {menu_title}",
-        "",
-    ]
+    menu_content = []
+    menu_content.append("")
+    colors = [HEX_PURPLE, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_BLUE, HEX_YELLOW, HEX_CYAN, HEX_PURPLE]
     for num, label, summary in options:
-        prefix = f"  {YELLOW}{BOLD}[{num}]{RESET}  {CYAN}{BOLD}{label:<22}{RESET}"
-        menu_lines.append(f"{prefix} {WHITE}{summary}{RESET}")
+        c = colors[int(num)] if num.isdigit() else HEX_PURPLE
+        prefix = f"{pill(num, HEX_BG_DARK, c)}  {CYAN}{BOLD}{label:<22}{RESET}"
+        menu_content.append(f"  {prefix} {WHITE}{summary}{RESET}")
+    menu_content.append("")
 
+    from cybershell.ui.renderer import draw_panel
+    from cybershell.ui.theme import fg_hex
+    menu_panel_lines = draw_panel(menu_title, menu_content, inner_w, styled=True, border_color=fg_hex(HEX_PURPLE))
+    
     all_lines = (
         logo_lines
-        + ["", status_line_1, border_double, ""]
-        + about_lines
-        + [border_single, ""]
-        + menu_lines
-        + ["", border_double]
+        + ["", status_line_1, ""]
+        + [pad_to_width(line, width, align="center") for line in menu_panel_lines]
+        + [""]
     )
     return "\n".join(all_lines)
 
@@ -1091,7 +1071,11 @@ def interactive_game_loop(
     box_w = min(init_w - 4, 68)
 
     # Initial logs
+    ScreenTransition.wipe_screen(delay=0.005)
     if player.current_sector == 0 and not quest.is_completed:
+        Typewriter.stream_text("🌱 Welcome to Level 1: Look Around!", styled_prefix=GREEN, delay=0.015)
+        Typewriter.stream_text("Solve the challenge question above by typing the command or option letter!", styled_prefix=CYAN, delay=0.015)
+        Typewriter.stream_text("Tip: Type '?' for a hint, 'map' for level map.", styled_prefix=DIM, delay=0.015)
         terminal_logs: List[str] = [
             f"{GREEN}🌱 Welcome to Level 1: Look Around!{RESET}",
             f"{CYAN}Solve the challenge question above by typing the command or option letter!{RESET}",
@@ -1099,6 +1083,7 @@ def interactive_game_loop(
         ]
     else:
         lvl_display = player.current_sector + 1
+        Typewriter.stream_text(f"🌱 Entering Level {lvl_display}/15: {quest.sector_name}!", styled_prefix=GREEN, delay=0.015)
         terminal_logs = [
             f"{GREEN}🌱 Entering Level {lvl_display}/15: {quest.sector_name}!{RESET}",
             f"{DIM}Type 'help' for commands, '?' for a hint, 'map' for level map.{RESET}",
@@ -1107,6 +1092,7 @@ def interactive_game_loop(
     hint_tier = 1
     last_objective_id: Optional[str] = None
     level_start_badges = list(getattr(player, "badges", []))
+    docs_filter_term = ""
 
     while True:
         width, height = terminal_size()
@@ -1129,51 +1115,107 @@ def interactive_game_loop(
         cwd_path = vfs.get_cwd_path()
         cwd_short = cwd_path.replace(f"/home/{vfs.user}", "~")
 
-        # Compact rounded HUD at top (3-5 lines, rounded borders, no HP)
-        hud = draw_compact_hud(
-            character_name=player.character_name,
-            level_num=player.current_sector + 1,
-            sector_name=quest.sector_name,
-            xp=player.xp,
-            streak=getattr(player, "streak", 0),
-            objective_desc=obj_desc,
-            hp=player.hp,
-            max_hp=player.max_hp,
-            width=width,
-            styled=True,
-            total_levels=15,
-        )
-
-        # Question card if there is an active objective
-        q_card = ""
+        task_inner_w = int(width * 0.70) - 4
+        # Compact task content
+        task_content = []
+        task_content.append(f"{YELLOW}Level {player.current_sector + 1}/15: {quest.sector_name}{RESET}")
         if active_obj:
-            obj_idx = quest.objectives.index(active_obj) if active_obj in quest.objectives else 0
-            q_card = draw_question_card(
-                question_num=obj_idx + 1,
-                total_questions=len(quest.objectives),
-                question_text=getattr(active_obj, "question", "") or active_obj.description,
-                options=getattr(active_obj, "options", []),
-                scenario=getattr(active_obj, "scenario", ""),
-                width=width,
-                styled=True,
-            )
+            task_content.append("")
+            desc = getattr(active_obj, 'question', '') or active_obj.description
+            for line in textwrap.wrap(desc, width=task_inner_w):
+                task_content.append(f"{BOLD}{line}{RESET}")
+            if getattr(active_obj, "options", None):
+                task_content.append("")
+                for idx, opt in enumerate(active_obj.options):
+                    letter = ["A", "B", "C", "D"][idx]
+                    for i, opt_line in enumerate(textwrap.wrap(opt, width=task_inner_w - 6)):
+                        if i == 0:
+                            task_content.append(f"  [{letter}] {opt_line}")
+                        else:
+                            task_content.append(f"      {opt_line}")
+        else:
+            task_content.append("")
+            task_content.append("All level goals complete! Type 'next'.")
+
+        docs_inner_w = int(width * 0.30) - 4
+        # Docs content
+        docs_content = []
+        if docs_filter_term:
+            filtered_cmds = []
+            term = docs_filter_term.lower()
+            for cmd in app.codex.list_commands():
+                matches = term in cmd['name'].lower() or term in cmd['description'].lower()
+                match_extra = None
+                
+                if not matches and 'flags' in cmd:
+                    for f_name, f_desc in cmd['flags'].items():
+                        if term in f_name.lower() or term in f_desc.lower():
+                            matches = True
+                            match_extra = f"Flag {f_name}: {f_desc}"
+                            break
+                            
+                if not matches and 'examples' in cmd:
+                    for ex in cmd['examples']:
+                        if term in ex.lower():
+                            matches = True
+                            match_extra = f"Ex: {ex}"
+                            break
+                            
+                if not matches and 'combos' in cmd:
+                    for cb in cmd['combos']:
+                        if term in cb.lower():
+                            matches = True
+                            match_extra = f"Combo: {cb}"
+                            break
+                
+                if matches:
+                    cmd_copy = dict(cmd)
+                    if match_extra:
+                        cmd_copy['_match_extra'] = match_extra
+                    filtered_cmds.append(cmd_copy)
+            docs_content.append(f"{YELLOW}Search: '{docs_filter_term}'{RESET}")
+        else:
+            filtered_cmds = app.codex.list_commands()
+            
+        for cmd in filtered_cmds[:15]:
+            desc_lines = textwrap.wrap(cmd['description'], width=docs_inner_w - 9)
+            if not desc_lines:
+                desc_lines = [""]
+            docs_content.append(f"{CYAN}{cmd['name']:<8}{RESET} {DIM}{desc_lines[0]}{RESET}")
+            for extra_line in desc_lines[1:]:
+                docs_content.append(f"         {DIM}{extra_line}{RESET}")
+                
+            if '_match_extra' in cmd:
+                match_lines = textwrap.wrap(cmd['_match_extra'], width=docs_inner_w - 4)
+                for ml in match_lines:
+                    docs_content.append(f"    {GREEN}{ml}{RESET}")
+                
+        if not filtered_cmds:
+            docs_content.append(f"{RED}No results found.{RESET}")
+            
+        docs_content.append("")
+        docs_content.append(f"{DIM}Type 'search <term>' to filter{RESET}")
+
+        # Mascot content
+        mascot_content = get_portrait(player.character_name, styled=True)
+        quotes = ["You got this! 🌱", "Keep exploring!", "Every error is a lesson!"]
+        mascot_content.append("")
+        mascot_content.append(f"{GREEN}{quotes[player.xp % len(quotes)]}{RESET}".center(30))
+
+        layout = draw_opencode_layout(
+            task_title="YOUR TASK", task_content=task_content,
+            term_title="TERMINAL", term_content=terminal_logs,
+            docs_title="LOCAL DOCS", docs_content=docs_content,
+            mascot_content=mascot_content,
+            width=width, height=height - 2, # leaving room for prompt
+            gap=1, styled=True
+        )
 
         footer = draw_control_footer(screen_type="terminal", width=width, styled=True)
 
-        # Clear screen and display compact HUD + Question Card
         sys.stdout.write("\033[H\033[J")
-        sys.stdout.write(hud + "\n")
-        if q_card:
-            sys.stdout.write(q_card + "\n")
-
-        # Display rolling terminal logs with space budgeting
-        overhead = 14 if q_card else 6
-        available_lines = max(4, height - overhead)
-        display_logs = terminal_logs[-available_lines:] if len(terminal_logs) > available_lines else terminal_logs
-        for line in display_logs:
-            sys.stdout.write(line + "\n")
-
-        sys.stdout.write(footer + "\n")
+        sys.stdout.write(layout + "\n")
+        sys.stdout.write(pad_to_width(footer, width, align="center") + "\n")
         sys.stdout.flush()
 
         try:
@@ -1217,6 +1259,17 @@ def interactive_game_loop(
 
         if input_lower == "clear":
             terminal_logs = []
+            continue
+
+        if input_lower.startswith("search "):
+            docs_filter_term = input_lower[7:].strip()
+            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{CYAN}Filtered LOCAL DOCS by '{docs_filter_term}'{RESET}")
+            continue
+        elif input_lower == "search":
+            docs_filter_term = ""
+            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{CYAN}Cleared LOCAL DOCS filter.{RESET}")
             continue
 
         if input_lower == "save":
@@ -1318,6 +1371,7 @@ def interactive_game_loop(
 
         if typo:
             sugg, expl = typo
+            
             terminal_logs.append(f"{YELLOW}💡 [TIP] Detected '{actual_cmd}'. Did you mean '{sugg}'? {expl}{RESET}")
 
         if result.stdout:
@@ -1367,7 +1421,14 @@ def interactive_game_loop(
                 elif quest.sector_id not in player.completed_sectors:
                     player.completed_sectors.append(quest.sector_id)
 
-                terminal_logs.append(f"{MAGENTA}{BOLD}🎉 LEVEL {quest.sector_id + 1} ({quest.sector_name.upper()}) COMPLETED!{RESET}")
+                celebration = CelebrationEffect.render_celebration(
+                    title=f"LEVEL {quest.sector_id + 1} COMPLETED!",
+                    subtitle=f"Sector: {quest.sector_name.upper()} | +{reward_sum} XP",
+                    width=width,
+                    animate=False,
+                )
+                for c_line in celebration.splitlines():
+                    terminal_logs.append(c_line)
 
                 # Show badge status change only after level completion (not in between tasks)
                 curr_badges = list(getattr(player, "badges", []))
@@ -1396,6 +1457,7 @@ def interactive_game_loop(
                     )
                     for u_line in unlock_banner.splitlines():
                         terminal_logs.append(u_line)
+                    Typewriter.stream_text(f'"{quest.lore[:80]}..."', delay=0.02, styled_prefix=f"{GREEN}Guide {quest.npc_name}: ")
                     terminal_logs.append(f"{GREEN}Guide {quest.npc_name}: \"{quest.lore[:80]}...\"{RESET}")
                 else:
                     save_game(player, cadet_mode)
@@ -1414,6 +1476,7 @@ def interactive_game_loop(
 
         if player.level > old_level:
             terminal_logs.append(f"{MAGENTA}{BOLD}🌟 LEVEL UP! You reached Level {player.level}! Title: {player.rank}{RESET}")
+            Typewriter.stream_text(f"🌟 LEVEL UP! You reached Level {player.level}! Title: {player.rank}", delay=0.015, styled_prefix=f"{MAGENTA}{BOLD}")
 
 
 # =============================================================================
@@ -1607,7 +1670,16 @@ def main() -> int:
         run_demo(args.name)
         return 0
 
-    main_menu_loop(args.name, args.sector)
+    try:
+        # Enter alternate screen buffer to prevent scrollback bleeding
+        sys.stdout.write("\033[?1049h\033[H")
+        sys.stdout.flush()
+        main_menu_loop(args.name, args.sector)
+    finally:
+        # Exit alternate screen buffer safely
+        sys.stdout.write("\033[?1049l")
+        sys.stdout.flush()
+        
     return 0
 
 

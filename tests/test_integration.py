@@ -252,24 +252,28 @@ class TestCyberShellIntegration(unittest.TestCase):
 
         # Verify title screen rendering
         title_render = app.render_title(80)
-        self.assertIn("BYTE'S LINUX ADVENTURE", title_render)
+        self.assertIn("MAIN DIRECTORY", title_render)
 
         # Switch to Playground
         app.set_screen(RPGApp.SCREEN_LAB)
         self.assertEqual(app.get_screen_name(), "ADVENTURE PLAYGROUND")
         lab_render = app.render_lab(80)
-        self.assertIn("GUIDE & OBJECTIVE", lab_render)
-        self.assertIn("TERMINAL", lab_render)
+        from cybershell.ui.theme import strip_ansi
+        lab_clean = strip_ansi(lab_render)
+        self.assertIn("GUIDE & OBJECTIVE", lab_clean)
+        self.assertIn("TERMINAL", lab_clean)
 
         # Switch to Codex
         app.set_screen(RPGApp.SCREEN_CODEX)
         codex_render = app.render()
-        self.assertIn("COMMAND GUIDE", codex_render)
+        codex_clean = strip_ansi(codex_render)
+        self.assertIn("COMMAND GUIDE", codex_clean)
 
         # Switch to Map
         app.set_screen(RPGApp.SCREEN_MAP)
         map_render = app.render()
-        self.assertIn("ADVENTURE MAP", map_render)
+        map_clean = strip_ansi(map_render)
+        self.assertIn("CORE NODE", map_clean)
 
     # -------------------------------------------------------------------------
     # 6. End-to-End Quest Progression Simulation
@@ -605,9 +609,9 @@ class TestCyberShellIntegration(unittest.TestCase):
         screen_text = render_opening_screen(player, width=80, cadet_mode=True, has_save=False)
 
         # Verify key sections
-        self.assertIn("BYTE'S LINUX ADVENTURE", screen_text)
+        self.assertIn("MAIN DIRECTORY", screen_text)
         self.assertIn("Explorer:", screen_text)
-        self.assertIn("WELCOME TO BYTE'S LINUX ADVENTURE", screen_text)
+        self.assertIn("CHOOSE A DESTINATION", screen_text)
         self.assertIn("Start Adventure", screen_text)
         self.assertIn("Adventure Map", screen_text)
         self.assertIn("Command Guide", screen_text)

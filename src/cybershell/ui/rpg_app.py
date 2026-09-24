@@ -38,7 +38,13 @@ from .renderer import (
     draw_panel,
     draw_split_panels,
     terminal_size,
+    draw_statusline,
+    draw_breadcrumb,
+    draw_floating_modal,
+    draw_control_footer,
+    pad_to_width,
 )
+from .theme import gradient_text, pill, fg_hex, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_BLUE, HEX_BG_DARK, FG_BORDER, FG_CYAN, RESET, BOLD
 
 
 # =============================================================================
@@ -273,23 +279,26 @@ class RPGApp:
     def render_title(self, width: int = 80) -> str:
         """Render the title screen with friendly logo and menu options."""
         width = max(40, width)
-        logo_lines = [line.center(width) for line in ADVENTURE_LOGO.strip("\n").splitlines()]
-        menu_lines = [
+        logo_lines = [pad_to_width(gradient_text(line, HEX_CYAN, HEX_PURPLE), width, align="center") for line in ADVENTURE_LOGO.strip("\n").splitlines()]
+        menu_content = [
             "",
-            "🌱 BYTE'S LINUX ADVENTURE 🌱".center(width),
-            "A friendly, playful terminal journey through Linux".center(width),
+            f"  {pill('1', HEX_BG_DARK, HEX_CYAN)}  {FG_CYAN}START ADVENTURE{RESET}",
+            f"  {pill('2', HEX_BG_DARK, HEX_PURPLE)}  {FG_CYAN}COMMAND GUIDE{RESET}",
+            f"  {pill('3', HEX_BG_DARK, HEX_GREEN)}  {FG_CYAN}BACKPACK & ITEMS{RESET}",
+            f"  {pill('4', HEX_BG_DARK, HEX_BLUE)}  {FG_CYAN}ADVENTURE MAP (15 LEVELS){RESET}",
+            f"  {pill('5', HEX_BG_DARK, HEX_YELLOW)}  {FG_CYAN}PERMISSIONS PUZZLE{RESET}",
+            f"  {pill('6', HEX_BG_DARK, HEX_CYAN)}  {FG_CYAN}FIELD MANUAL & RULES{RESET}",
+            f"  {pill('0', HEX_BG_DARK, HEX_PURPLE)}  {FG_CYAN}EXIT{RESET}",
             "",
-            "[1] START ADVENTURE".center(width),
-            "[2] COMMAND GUIDE".center(width),
-            "[3] BACKPACK & ITEMS".center(width),
-            "[4] ADVENTURE MAP (15 LEVELS)".center(width),
-            "[5] PERMISSIONS PUZZLE".center(width),
-            "[6] FIELD MANUAL & RULES".center(width),
-            "[0] EXIT".center(width),
-            "",
-            "Press a number to explore. [Esc] Return to menu".center(width),
         ]
-        return "\n".join(logo_lines + menu_lines)
+        menu_panel_lines = draw_panel("MAIN DIRECTORY", menu_content, width - 4, styled=True, border_color=fg_hex(HEX_PURPLE))
+        return "\n".join(
+            logo_lines
+            + [""]
+            + [pad_to_width(line, width, align="center") for line in menu_panel_lines]
+            + [""]
+            + [pad_to_width(draw_control_footer("menu", width), width, align="center")]
+        )
 
     def render_lab(
         self,
@@ -299,22 +308,23 @@ class RPGApp:
         terminal_lines: Optional[List[str]] = None,
     ) -> str:
         """Render the Adventure Playground screen with split panels and activity ticker."""
-        header = draw_double_header(
-            self.character_name,
-            self.hp,
-            self.max_hp,
-            self.xp,
-            "ADVENTURE PLAYGROUND",
-            width,
+        header = draw_statusline(
+            mode="SHELL",
+            breadcrumb="~ › adventure › lab",
+            objective="Solve challenge questions",
+            xp=self.xp,
+            level=1 + (self.xp // 100),
+            width=width,
+            styled=True,
         )
 
         if intel_lines is not None:
             left_content = list(intel_lines)
         else:
             npc = npc_name or self.character_name
-            portrait = get_portrait(npc, styled=False)
+            portrait = get_portrait(npc, styled=True)
             left_content = [
-                f"GUIDE: [{npc.upper()}]",
+                f"{BOLD}GUIDE: [{npc.upper()}]{RESET}",
                 "Status: EXPLORING 🌱",
             ] + portrait + [
                 "Objective: Solve challenge questions",
@@ -327,20 +337,24 @@ class RPGApp:
             right_content = self.terminal_buffer.get_visible_logs(max(6, len(left_content)))
 
         panels = draw_split_panels(
-            "GUIDE & OBJECTIVE",
+            gradient_text("GUIDE & OBJECTIVE", HEX_CYAN, HEX_GREEN),
             left_content,
-            "TERMINAL",
+            gradient_text("TERMINAL", HEX_CYAN, HEX_BLUE),
             right_content,
             width,
+            styled=True
         )
 
-        ticker = self.ticker.render(width)
+        ticker = draw_floating_modal("ACTIVITY", [self.ticker.active_message], width=width, styled=True, shadow=False)
+        footer = pad_to_width(draw_control_footer("terminal", width), width, align="center")
 
-        components = [header]
+        components = [header, ""]
         if self.is_boss_active:
-            components.append(self.render_boss_hud(width))
+            components.append(self.render_boss_hud(width, styled=True))
         components.append(panels)
+        components.append("")
         components.append(ticker)
+        components.append(footer)
 
         return "\n".join(components)
 
@@ -374,63 +388,67 @@ class RPGApp:
 
     def render_codex(self, width: int = 80) -> str:
         """Render the Command Guide screen listing all known commands."""
-        header = draw_double_header(
-            self.character_name,
-            self.hp,
-            self.max_hp,
-            self.xp,
-            "COMMAND GUIDE // CODEX",
-            width,
+        header = draw_statusline(
+            mode="CODEX",
+            breadcrumb="~ › tools › codex",
+            objective="Browse command guide",
+            xp=self.xp,
+            level=1 + (self.xp // 100),
+            width=width,
+            styled=True,
         )
 
-        content = ["[ 🌱 LINUX COMMAND DIRECTORY // CODEX ]", ""]
+        content = [gradient_text("[ 🌱 LINUX COMMAND DIRECTORY // CODEX ]", HEX_PURPLE, HEX_CYAN), ""]
         for entry in self.codex.list_commands():
             content.append(f"  {entry['name']:<9} {entry['description']}")
         content.append("")
         content.append("Type 'man <command>' or 'lookup <command>' in the terminal for details!")
 
-        panel_lines = draw_panel("COMMAND GUIDE", content, width - 4)
-        return header + "\n" + "\n".join(panel_lines)
+        panel_lines = draw_panel(gradient_text("COMMAND GUIDE", HEX_PURPLE, HEX_CYAN), content, width - 4, styled=True, border_color=fg_hex(HEX_PURPLE))
+        return header + "\n\n" + "\n".join(panel_lines) + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
 
     def render_map(self, width: int = 80) -> str:
         """Render the Adventure Map screen."""
-        header = draw_double_header(
-            self.character_name,
-            self.hp,
-            self.max_hp,
-            self.xp,
-            "ADVENTURE MAP (15 LEVELS)",
-            width,
+        header = draw_statusline(
+            mode="MAP",
+            breadcrumb="~ › tools › map",
+            objective="View progression",
+            xp=self.xp,
+            level=1 + (self.xp // 100),
+            width=width,
+            styled=True,
         )
-        return header + "\n" + self.mainframe.render()
+        return header + "\n\n" + self.mainframe.render() + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
 
     def render_minigame(self, width: int = 80) -> str:
         """Render the Permissions Minigame screen."""
-        header = draw_double_header(
-            self.character_name,
-            self.hp,
-            self.max_hp,
-            self.xp,
-            "PERMISSIONS PUZZLE // MINIGAME",
-            width,
+        header = draw_statusline(
+            mode="MINIGAME",
+            breadcrumb="~ › tools › minigame",
+            objective="Solve chmod puzzle",
+            xp=self.xp,
+            level=1 + (self.xp // 100),
+            width=width,
+            styled=True,
         )
         if self.minigame.active_puzzle is None:
             self.minigame.generate_puzzle()
         door = self.minigame.render_door()
-        return header + "\n" + door
+        return header + "\n\n" + door + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
 
     def render_inventory(self, width: int = 80) -> str:
         """Render the Backpack and collected goodies screen."""
-        header = draw_double_header(
-            self.character_name,
-            self.hp,
-            self.max_hp,
-            self.xp,
-            "BACKPACK & ITEMS",
-            width,
+        header = draw_statusline(
+            mode="BACKPACK",
+            breadcrumb="~ › tools › inventory",
+            objective="Inspect items",
+            xp=self.xp,
+            level=1 + (self.xp // 100),
+            width=width,
+            styled=True,
         )
 
-        content = ["[ 🎒 COLLECTED GOODIES & BADGES ]", ""]
+        content = [gradient_text("[ 🎒 COLLECTED GOODIES & BADGES ]", HEX_YELLOW, HEX_GREEN), ""]
         if not self.inventory:
             content.append("  Your backpack is currently empty.")
             content.append("  Complete levels and discover secrets to collect goodies! 🌱")
@@ -446,8 +464,8 @@ class RPGApp:
         content.append("")
         content.append("Press Enter or Esc to return.")
 
-        panel_lines = draw_panel("BACKPACK", content, width - 4)
-        return header + "\n" + "\n".join(panel_lines)
+        panel_lines = draw_panel(gradient_text("BACKPACK", HEX_YELLOW, HEX_GREEN), content, width - 4, styled=True, border_color=fg_hex(HEX_YELLOW))
+        return header + "\n\n" + "\n".join(panel_lines) + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
 
     def render_manual(self, width: int = 80, page: int = 1, styled: bool = False) -> str:
         """Render the Field Manual & Rules screen."""
