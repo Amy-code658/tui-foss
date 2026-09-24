@@ -200,12 +200,52 @@ def run_smoke_test() -> int:
 SAVE_FILE_PATH = os.path.expanduser("~/.cybershell_save.json")
 
 
+def get_save_path(username: Optional[str] = None) -> str:
+    """Return user-specific save path or default save path."""
+    if not username:
+        return SAVE_FILE_PATH
+    clean = "".join(c for c in username.lower() if c.isalnum() or c in ("-", "_")).strip()
+    if not clean or clean in ("explorer", "byte", "default"):
+        return SAVE_FILE_PATH
+    return os.path.expanduser(f"~/.cybershell_save_{clean}.json")
+
+
+def get_last_saved_username() -> Optional[str]:
+    """Retrieve the username from the most recent save file if available."""
+    default_path = os.path.expanduser("~/.cybershell_save.json")
+    candidates: List[Tuple[float, str]] = []
+    if os.path.isfile(default_path):
+        candidates.append((os.path.getmtime(default_path), default_path))
+
+    import glob
+    for p in glob.glob(os.path.expanduser("~/.cybershell_save_*.json")):
+        if os.path.isfile(p):
+            candidates.append((os.path.getmtime(p), p))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    most_recent = candidates[0][1]
+    try:
+        with open(most_recent, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        name = str(data.get("character_name", "")).strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    return None
+
+
 def save_game(
     player: PlayerStats,
     cadet_mode: bool = True,
-    filepath: str = SAVE_FILE_PATH,
+    filepath: Optional[str] = None,
 ) -> bool:
     """Save player progression to JSON checkpoint file."""
+    if filepath is None:
+        filepath = get_save_path(player.character_name)
     try:
         data = {
             "character_name": player.character_name,
@@ -225,22 +265,58 @@ def save_game(
         }
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+
+        default_file = os.path.expanduser("~/.cybershell_save.json")
+        if filepath != default_file:
+            try:
+                with open(default_file, "w", encoding="utf-8") as f_def:
+                    json.dump(data, f_def, indent=2)
+            except Exception:
+                pass
         return True
     except Exception:
         return False
 
 
 def load_saved_game(
-    filepath: str = SAVE_FILE_PATH,
+    filepath: Optional[str] = None,
+    username: Optional[str] = None,
 ) -> Optional[Tuple[PlayerStats, bool]]:
     """Load player progression from checkpoint file."""
-    if not os.path.isfile(filepath):
+    target_path = filepath
+    if target_path is None:
+        if username:
+            candidate = get_save_path(username)
+            if os.path.isfile(candidate):
+                target_path = candidate
+            else:
+                default_file = os.path.expanduser("~/.cybershell_save.json")
+                if os.path.isfile(default_file):
+                    try:
+                        with open(default_file, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                        if str(d.get("character_name", "")).strip().lower() == username.strip().lower():
+                            target_path = default_file
+                    except Exception:
+                        pass
+                if target_path is None:
+                    return None
+        else:
+            default_file = os.path.expanduser("~/.cybershell_save.json")
+            if os.path.isfile(default_file):
+                target_path = default_file
+            else:
+                return None
+
+    if not os.path.isfile(target_path):
         return None
+
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(target_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        saved_name = str(data.get("character_name", username or "Byte"))
         player = PlayerStats(
-            character_name=str(data.get("character_name", "Byte")),
+            character_name=username if username else saved_name,
             hp=int(data.get("hp", 100)),
             max_hp=int(data.get("max_hp", 100)),
             xp=int(data.get("xp", 0)),
@@ -263,15 +339,28 @@ def load_saved_game(
         return None
 
 
-def delete_saved_game(filepath: str = SAVE_FILE_PATH) -> bool:
+def delete_saved_game(
+    filepath: Optional[str] = None,
+    username: Optional[str] = None,
+) -> bool:
     """Remove checkpoint save file."""
-    try:
-        if os.path.isfile(filepath):
-            os.remove(filepath)
-            return True
-    except Exception:
-        pass
-    return False
+    deleted_any = False
+    targets = []
+    if filepath:
+        targets.append(filepath)
+    else:
+        if username:
+            targets.append(get_save_path(username))
+        targets.append(SAVE_FILE_PATH)
+
+    for p in targets:
+        try:
+            if os.path.isfile(p):
+                os.remove(p)
+                deleted_any = True
+        except Exception:
+            pass
+    return deleted_any
 
 
 KNOWN_COMMANDS = [
@@ -466,8 +555,31 @@ class VFSTabCompleter:
         return None
 
 
+def configure_readline_bindings() -> None:
+    """Register readline shortcuts, enabling Ctrl+Space & Ctrl+P for Command Center."""
+    if not READLINE_AVAILABLE or readline is None:
+        return
+    bindings = [
+        r'"\C-@": "\C-u:cmd\n"',        # Ctrl+Space (standard NUL \x00 in Linux terminals)
+        r'"\C- ": "\C-u:cmd\n"',        # Ctrl+Space alternative readline syntax
+        r'"\C-p": "\C-u:cmd\n"',        # Ctrl+P (Neovim / VSCode palette fallback)
+        r'"\e[32;5u": "\C-u:cmd\n"',    # CSI u keyboard protocol for Ctrl+Space
+        r'"\e[27;5;32~": "\C-u:cmd\n"', # Xterm modifyOtherKeys for Ctrl+Space
+    ]
+    for b in bindings:
+        try:
+            readline.parse_and_bind(b)
+        except Exception:
+            pass
+
+
+# Configure initial bindings on load
+if READLINE_AVAILABLE and readline is not None:
+    configure_readline_bindings()
+
+
 def setup_tab_completion(vfs: VirtualFileSystem) -> None:
-    """Configure readline tab completion for shell commands and VFS files."""
+    """Configure readline tab completion and keybindings for shell commands and VFS files."""
     if not READLINE_AVAILABLE or readline is None:
         return
     completer = VFSTabCompleter(vfs)
@@ -477,6 +589,7 @@ def setup_tab_completion(vfs: VirtualFileSystem) -> None:
         readline.set_completer_delims(" \t\n")
     except Exception:
         pass
+    configure_readline_bindings()
 
 
 def get_progressive_hint(
@@ -574,10 +687,10 @@ def explain_command(
 # PERSONALIZED ONBOARDING & OPENING HERO SCREEN
 # =============================================================================
 
-def prompt_player_onboarding(width: int = 80) -> str:
+def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer") -> str:
     """Personalized onboarding card asking user's name with clean web-app aesthetics."""
     if not sys.stdin.isatty():
-        return "Explorer"
+        return current_name if current_name else "Explorer"
 
     width = max(50, min(width, 76))
     inner_w = width - 4
@@ -609,21 +722,26 @@ def prompt_player_onboarding(width: int = 80) -> str:
     print(pad_to_width(card_line(f"{theme.fg_muted}{'Safe hands-on sandbox • Real-time feedback • Zero damage'.center(inner_w)}{RESET}"), width, align="center"))
     print(pad_to_width(card_line(""), width, align="center"))
     print(pad_to_width(card_line(f"{BOLD}{theme.fg_yellow}{'Before we start, what is your name, explorer?'.center(inner_w)}{RESET}"), width, align="center"))
+    if current_name and current_name != "Explorer":
+        print(pad_to_width(card_line(f"{theme.fg_cyan}{f'Active Profile: {current_name}'.center(inner_w)}{RESET}"), width, align="center"))
     print(pad_to_width(card_line(""), width, align="center"))
     print(pad_to_width(bot_border, width, align="center"))
     print()
 
-    sys.stdout.write(f"  {BOLD}{theme.fg_cyan}Enter your name (default: Explorer): {RESET}")
+    if current_name and current_name != "Explorer":
+        sys.stdout.write(f"  {BOLD}{theme.fg_cyan}Enter your name (press [ENTER] for {current_name}, or type new name): {RESET}")
+    else:
+        sys.stdout.write(f"  {BOLD}{theme.fg_cyan}Enter your name (default: Explorer): {RESET}")
     sys.stdout.flush()
 
     try:
         raw_name = input().strip()
     except (KeyboardInterrupt, EOFError):
-        return "Explorer"
+        return current_name if current_name else "Explorer"
 
     clean_name = "".join(c for c in raw_name if c.isalnum() or c in ("-", "_", " ")).strip()
     if not clean_name:
-        clean_name = "Explorer"
+        clean_name = current_name if current_name else "Explorer"
     clean_name = clean_name[:16]
 
     sys.stdout.write("\033[H\033[J")
@@ -634,7 +752,7 @@ def prompt_player_onboarding(width: int = 80) -> str:
     print(pad_to_width(f"{BOLD}{theme.fg_green}[✓] Welcome aboard, {clean_name}! Tux is excited to train with you.{RESET}", width, align="center"))
     print(pad_to_width(f"{theme.fg_muted}Initializing your personal Linux sandbox...{RESET}", width, align="center"))
     if sys.stdout.isatty():
-        time.sleep(0.5)
+        time.sleep(0.4)
     return clean_name
 
 
@@ -1391,7 +1509,10 @@ def interactive_game_loop(
             break
 
         # Command Center palette (Ctrl+Space / \x00, :cmd, :menu, :space, cmd)
-        if user_input in ("\x00", "\x00\x00") or input_lower in (":cmd", ":space", ":menu", "cmd", ":center"):
+        if user_input in ("\x00", "\x00\x00") or input_lower in (
+            ":cmd", ":space", ":menu", "cmd", ":center", ":p", "palette",
+            "ctrl+space", "ctrl-space", "ctrl space", "<c-space>", "^space",
+        ):
             action = run_command_center(player, all_quests, width)
             if action == "search_docs":
                 terminal_logs.append(f"{CYAN}[+] Type 'search <query>' to filter local documentation.{RESET}")
@@ -1747,16 +1868,26 @@ def interactive_game_loop(
 # =============================================================================
 
 def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
-    """Main menu loop with navigation and first-time field manual."""
-    saved_data = load_saved_game()
+    """Main menu loop with navigation, profile switching, and first-time field manual."""
+    width, _ = terminal_size()
+    last_user = get_last_saved_username() or (character_name if character_name != "Byte" else "Explorer")
+
+    # Prompt user on launch to confirm active explorer or switch to a new user
+    if sys.stdin.isatty():
+        active_user = prompt_player_onboarding(width=width, current_name=last_user)
+    else:
+        active_user = character_name or "Explorer"
+
+    saved_data = load_saved_game(username=active_user)
     cadet_mode = True
     first_launch = saved_data is None
 
     if saved_data is not None:
         player, cadet_mode = saved_data
+        player.character_name = active_user
     else:
         player = PlayerStats(
-            character_name=character_name,
+            character_name=active_user,
             hp=100,
             max_hp=100,
             xp=0,
@@ -1775,12 +1906,8 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
         xp=player.xp,
     )
 
-    # First launch shows the personalized onboarding, animated Tux, and mandatory Field Manual!
+    # First launch for this specific user shows onboarding animation & mandatory Field Manual!
     if first_launch:
-        width, _ = terminal_size()
-        p_name = prompt_player_onboarding(width)
-        player.character_name = p_name
-        app.character_name = p_name
         save_game(player, cadet_mode)
         animate_tux_welcome(character_name=player.character_name, width=width, quick=False)
         show_mandatory_field_manual(width)
@@ -1848,7 +1975,8 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
         animate_tux_welcome(character_name=player.character_name, width=width, quick=True)
 
     while True:
-        has_save = os.path.isfile(SAVE_FILE_PATH)
+        user_save = get_save_path(player.character_name)
+        has_save = os.path.isfile(user_save) or os.path.isfile(SAVE_FILE_PATH)
         width, _ = terminal_size()
         sys.stdout.write("\033[H\033[J")
         print(render_opening_screen(player, width, cadet_mode=cadet_mode, has_save=has_save))
@@ -1867,6 +1995,27 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
         if choice_lower in ("0", "exit", "quit", "q"):
             print(f"\n{CYAN}See you next time! Session closed.{RESET}\n")
             break
+
+        # Switch active profile / user directly in menu
+        if choice_lower in ("user", "profile", "switch", ":user", ":profile"):
+            p_name = prompt_player_onboarding(width, current_name=player.character_name)
+            if p_name and p_name != player.character_name:
+                active_user = p_name
+                saved_data = load_saved_game(username=active_user)
+                if saved_data is not None:
+                    player, cadet_mode = saved_data
+                    player.character_name = active_user
+                else:
+                    player = PlayerStats(
+                        character_name=active_user,
+                        hp=100,
+                        max_hp=100,
+                        xp=0,
+                        current_sector=0,
+                    )
+                    save_game(player, cadet_mode)
+                app.character_name = active_user
+            continue
 
         # Direct theme switching in the first interface
         direct_theme_target = choice_lower
@@ -1903,8 +2052,8 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                     cadet_mode=cadet_mode,
                 )
             elif choice_lower in ("2", "new", "reset", "n"):
-                delete_saved_game()
-                p_name = prompt_player_onboarding(width) if sys.stdin.isatty() else character_name
+                delete_saved_game(username=player.character_name)
+                p_name = prompt_player_onboarding(width, current_name=player.character_name) if sys.stdin.isatty() else player.character_name
                 player = PlayerStats(
                     character_name=p_name,
                     hp=100,
@@ -1916,6 +2065,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                 vfs = VirtualFileSystem(default_user="byte")
                 interpreter = Interpreter(vfs=vfs)
                 all_quests = get_sector_quests()
+                save_game(player, cadet_mode)
                 animate_tux_welcome(character_name=player.character_name, width=width, quick=False)
                 show_mandatory_field_manual(width)
                 interactive_game_loop(

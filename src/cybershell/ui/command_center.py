@@ -309,6 +309,8 @@ def run_command_center(
             return None
 
         choice_lower = choice.lower()
+        if choice_lower in (":cmd", "cmd", "\x00", "\x00\x00"):
+            continue
 
         if choice in ("1",) or "search" in choice_lower or "doc" in choice_lower:
             return "search_docs"

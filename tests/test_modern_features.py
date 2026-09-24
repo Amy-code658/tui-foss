@@ -468,5 +468,83 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         self.assertIn(prompt, layout)
 
 
+class TestMultiUserProfileAndReadlineShortcuts(unittest.TestCase):
+    """Verify multi-user profile persistence and Ctrl+Space readline macro configuration."""
+
+    def test_get_save_path_resolution(self) -> None:
+        from cybershell.run import get_save_path, SAVE_FILE_PATH
+        self.assertEqual(get_save_path(None), SAVE_FILE_PATH)
+        self.assertEqual(get_save_path(""), SAVE_FILE_PATH)
+        self.assertEqual(get_save_path("Explorer"), SAVE_FILE_PATH)
+        self.assertEqual(get_save_path("byte"), SAVE_FILE_PATH)
+        self.assertEqual(get_save_path("default"), SAVE_FILE_PATH)
+
+        alice_path = get_save_path("Alice")
+        self.assertTrue(alice_path.endswith(".cybershell_save_alice.json"))
+
+        bob_path = get_save_path("Bob_99")
+        self.assertTrue(bob_path.endswith(".cybershell_save_bob_99.json"))
+
+    def test_multi_user_profile_isolation(self) -> None:
+        import tempfile
+        import os
+        from cybershell.run import save_game, load_saved_game, delete_saved_game
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_alice = os.path.join(tmp_dir, ".cybershell_save_alice.json")
+            file_bob = os.path.join(tmp_dir, ".cybershell_save_bob.json")
+
+            player_alice = PlayerStats(character_name="Alice", hp=100, xp=500, current_sector=3)
+            player_alice.level = 4
+            player_bob = PlayerStats(character_name="Bob", hp=80, xp=150, current_sector=1)
+            player_bob.level = 2
+
+            self.assertTrue(save_game(player_alice, cadet_mode=True, filepath=file_alice))
+            self.assertTrue(save_game(player_bob, cadet_mode=False, filepath=file_bob))
+
+            # Verify isolated loading
+            loaded_alice = load_saved_game(filepath=file_alice)
+            self.assertIsNotNone(loaded_alice)
+            self.assertEqual(loaded_alice[0].character_name, "Alice")
+            self.assertEqual(loaded_alice[0].xp, 500)
+            self.assertEqual(loaded_alice[0].level, 4)
+            self.assertTrue(loaded_alice[1])
+
+            loaded_bob = load_saved_game(filepath=file_bob)
+            self.assertIsNotNone(loaded_bob)
+            self.assertEqual(loaded_bob[0].character_name, "Bob")
+            self.assertEqual(loaded_bob[0].xp, 150)
+            self.assertEqual(loaded_bob[0].level, 2)
+            self.assertFalse(loaded_bob[1])
+
+            # Deletion of Bob does not remove Alice
+            self.assertTrue(delete_saved_game(filepath=file_bob))
+            self.assertFalse(os.path.isfile(file_bob))
+            self.assertTrue(os.path.isfile(file_alice))
+
+    def test_configure_readline_bindings(self) -> None:
+        from cybershell.run import configure_readline_bindings
+        # Ensure it executes without any exceptions
+        try:
+            configure_readline_bindings()
+        except Exception as e:
+            self.fail(f"configure_readline_bindings raised exception: {e}")
+
+    def test_ctrl_space_pexpect_pty_macro(self) -> None:
+        """Verify sending NUL (Ctrl+Space \x00) translates into :cmd through readline."""
+        import pexpect
+        child = pexpect.spawn(
+            "python3",
+            ["-c", "from cybershell.run import configure_readline_bindings; configure_readline_bindings(); x = input('TEST> '); print('RESULT:' + x)"],
+            encoding="utf-8",
+        )
+        child.expect("TEST> ")
+        child.send(chr(0)) # ASCII NUL = Ctrl+Space
+        child.expect(r"RESULT:(.*)")
+        out = child.match.group(1).strip()
+        self.assertEqual(out, ":cmd")
+        child.close()
+
+
 if __name__ == "__main__":
     unittest.main()
