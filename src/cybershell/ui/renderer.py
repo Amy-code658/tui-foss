@@ -53,6 +53,16 @@ PANEL_VERTICAL = "│"
 PANEL_DIVIDER_LEFT = "├"
 PANEL_DIVIDER_RIGHT = "┤"
 
+# Heavy, thick box drawing characters to prominently showcase theme border colors
+HEAVY_TOP_LEFT = "┏"
+HEAVY_TOP_RIGHT = "┓"
+HEAVY_BOTTOM_LEFT = "┗"
+HEAVY_BOTTOM_RIGHT = "┛"
+HEAVY_HORIZONTAL = "━"
+HEAVY_VERTICAL = "┃"
+HEAVY_DIVIDER_LEFT = "┣"
+HEAVY_DIVIDER_RIGHT = "┫"
+
 # Kept for compatibility
 TOP_LEFT = "╭"
 TOP_RIGHT = "╮"
@@ -621,15 +631,15 @@ def draw_fixed_panel(
     b_col = border_color if styled else ""
     b_rst = "\033[0m" if styled and b_col else ""
 
-    lines = [b_col + PANEL_TOP_LEFT + PANEL_HORIZONTAL * (width - 2) + PANEL_TOP_RIGHT + b_rst]
+    lines = [b_col + HEAVY_TOP_LEFT + HEAVY_HORIZONTAL * (width - 2) + HEAVY_TOP_RIGHT + b_rst]
 
     title_text = truncate_styled(f" {title} ", content_width)
     lines.append(
-        b_col + PANEL_VERTICAL + b_rst
+        b_col + HEAVY_VERTICAL + b_rst
         + " "
         + pad_to_width(title_text, content_width)
         + " "
-        + b_col + PANEL_VERTICAL + b_rst
+        + b_col + HEAVY_VERTICAL + b_rst
     )
 
     content_lines = list(content)
@@ -655,14 +665,14 @@ def draw_fixed_panel(
                 item = pad_to_width(item, content_width)
 
         lines.append(
-            b_col + PANEL_VERTICAL + b_rst
+            b_col + HEAVY_VERTICAL + b_rst
             + " "
             + item
             + " "
-            + b_col + PANEL_VERTICAL + b_rst
+            + b_col + HEAVY_VERTICAL + b_rst
         )
 
-    lines.append(b_col + PANEL_BOTTOM_LEFT + PANEL_HORIZONTAL * (width - 2) + PANEL_BOTTOM_RIGHT + b_rst)
+    lines.append(b_col + HEAVY_BOTTOM_LEFT + HEAVY_HORIZONTAL * (width - 2) + HEAVY_BOTTOM_RIGHT + b_rst)
     return lines
 
 

@@ -39,37 +39,43 @@ except ImportError:
     DIM = "\033[2m"
 
 
-# Distinct pet poses (3 lines each)
+# Distinct cute baby penguin poses (4 lines each)
 PET_SPRITES = {
     "idle": [
-        r"  /\_/\  ",
-        r" ( o.o ) ",
-        r"  > ^ <  ",
+        r"   .--.   ",
+        r"  |o  o|  ",
+        r" <( >v< )> ",
+        r"  (__)__) ",
     ],
     "happy": [
-        r"  /\_/\  ",
-        r" ( ^.^ ) ",
-        r"  > ^ <  ",
+        r"   .--.   ",
+        r"  |^  ^|  ",
+        r" <( >v< )> ",
+        r"  (__)__) ",
     ],
     "celebrating": [
-        r"  \ \o/ /",
-        r" ( ^O^ ) ",
-        "  / >*< \\",
+        r"  \\.--.// ",
+        r"  (^  ^)  ",
+        r"   (>O<)  ",
+        r"  (__)__) ",
     ],
     "confused": [
-        r"  /\_/\? ",
-        r" ( -.-;) ",
-        r"  > ~ <  ",
+        r"   .--. ? ",
+        r"  |o  -|  ",
+        r" <( >~< )> ",
+        r"  (__)__) ",
     ],
     "thinking": [
-        r"  /\_/\ .",
-        r" ( •_• )o",
-        r"  >   <  ",
+        r"   .--. . ",
+        r"  |•  •|o ",
+        r" <( >.< )> ",
+        r"  (__)__) ",
     ],
     "sleeping": [
-        r"  /\_/\  z",
-        r" ( -.- )z ",
-        r"  >   <   ",
+        r"   .--.  z",
+        r"  |-  -|z ",
+        r" <( >-< )> ",
+        r"  (__)__) ",
     ],
 }
 
@@ -185,40 +191,56 @@ class TerminalPet:
             return lines[:height]
 
         sprite = PET_SPRITES.get(self.state, PET_SPRITES["idle"])
-        
-        # Color based on state
-        if styled:
-            if self.state in ("happy", "celebrating"):
-                color = FG_GREEN
-            elif self.state == "confused":
-                color = FG_YELLOW
-            elif self.state == "thinking":
-                color = FG_CYAN
-            elif self.state == "sleeping":
-                color = FG_MUTED
-            else:
-                color = FG_PURPLE
-            rst = RESET
-        else:
-            color = ""
-            rst = ""
 
-        # Sprite rows centered
+        # Cute light blue penguin palette: soft blue body, bright yellow beak & feet, white eyes
+        if styled:
+            c_blue = "\033[38;2;121;192;255m"   # Cute light blue
+            c_yellow = "\033[38;2;241;224;90m"  # Cute yellow beak & feet
+            c_white = "\033[97m"                 # White eyes & text
+            c_rst = RESET
+            c_bld = BOLD
+        else:
+            c_blue = ""
+            c_yellow = ""
+            c_white = ""
+            c_rst = ""
+            c_bld = ""
+
+        # Sprite rows centered with light blue body, white eyes & yellow beak
         for row in sprite:
             centered = row.center(inner_w)
-            lines.append(f"{color}{centered}{rst}")
-
-        lines.append("")
+            if styled:
+                styled_row = centered
+                # Style yellow feet
+                if "(__)__)" in styled_row:
+                    styled_row = styled_row.replace("(__)__)", f"{c_bld}{c_yellow}(__)__){c_rst}")
+                # Style yellow beak
+                for beak in (">v<", ">O<", ">~<", ">.<", ">-<"):
+                    if beak in styled_row:
+                        styled_row = styled_row.replace(beak, f"{c_bld}{c_yellow}{beak}{c_rst}{c_blue}")
+                # Style white eyes
+                for eyes in ("o  o", "^  ^", "•  •", "o  -", "-  -"):
+                    if eyes in styled_row:
+                        styled_row = styled_row.replace(eyes, f"{c_bld}{c_white}{eyes}{c_rst}{c_blue}")
+                lines.append(f"{c_blue}{styled_row}{c_rst}")
+            else:
+                lines.append(centered)
 
         # Mood / Quote line
         prefix = f"{self.name}: "
-        quote = f"{prefix}{self.current_quote}"
-        avail_len = max(8, inner_w - 2)
-        if len(quote) > avail_len:
-            quote = quote[:max(0, avail_len - 3)] + "..."
-
-        quote_colored = f"{FG_TEXT}{quote}{RESET}" if styled else quote
-        lines.append(quote_colored.center(inner_w))
+        quote_text = self.current_quote
+        max_quote_len = max(4, inner_w - len(prefix) - 2)
+        if len(quote_text) > max_quote_len:
+            quote_text = quote_text[:max_quote_len - 3] + "..."
+        full_plain = f"{self.name}: {quote_text}"
+        pad_total = max(0, inner_w - len(full_plain))
+        pad_left = pad_total // 2
+        pad_right = pad_total - pad_left
+        if styled:
+            quote_line = f"{' ' * pad_left}{c_bld}{c_yellow}{self.name}:{c_rst} {c_white}{quote_text}{c_rst}{' ' * pad_right}"
+        else:
+            quote_line = f"{' ' * pad_left}{full_plain}{' ' * pad_right}"
+        lines.append(quote_line)
 
         # Pad to requested height
         while len(lines) < height:

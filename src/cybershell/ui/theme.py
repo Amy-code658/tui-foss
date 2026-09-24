@@ -346,6 +346,50 @@ THEMES: Dict[str, Theme] = {
         yellow="#f1e05a", purple="#bc8cff", red="#ff7b72",
         teal="#56d364", white="#ffffff",
     ),
+    "pastel-lavender": Theme(
+        id="pastel-lavender",
+        display_name="Pastel Lavender",
+        is_light=False,
+        bg_dark="#1b1725", surface="#241f32", surface_light="#322b44",
+        border="#5c4d7d", border_focus="#d4b5ff",
+        text="#f4eefa", text_muted="#9987b5",
+        cyan="#b5e2fa", blue="#b8c0ff", green="#bbf2c0",
+        yellow="#ffdfba", purple="#d4b5ff", red="#ffb3ba",
+        teal="#b5e2fa", white="#ffffff",
+    ),
+    "pastel-sakura": Theme(
+        id="pastel-sakura",
+        display_name="Pastel Sakura",
+        is_light=False,
+        bg_dark="#211a21", surface="#2d222e", surface_light="#3d3040",
+        border="#6e4f73", border_focus="#ffb7c5",
+        text="#fef2f6", text_muted="#a88aa4",
+        cyan="#bfe3e2", blue="#c4bbf0", green="#c3e6cb",
+        yellow="#ffe5b4", purple="#e8b4e8", red="#ff9aa2",
+        teal="#bfe3e2", white="#ffffff",
+    ),
+    "pastel-mint": Theme(
+        id="pastel-mint",
+        display_name="Pastel Mint",
+        is_light=False,
+        bg_dark="#15211e", surface="#1d2d29", surface_light="#283e38",
+        border="#446860", border_focus="#8ee4af",
+        text="#eef8f5", text_muted="#7da69c",
+        cyan="#a0e7e5", blue="#b4d4f8", green="#98dfaf",
+        yellow="#faedcb", purple="#d0bdf4", red="#ffabab",
+        teal="#a0e7e5", white="#ffffff",
+    ),
+    "pastel-peach": Theme(
+        id="pastel-peach",
+        display_name="Pastel Peach",
+        is_light=False,
+        bg_dark="#241c19", surface="#322622", surface_light="#44342e",
+        border="#74544b", border_focus="#ffb599",
+        text="#fef3ee", text_muted="#a6847a",
+        cyan="#b5e6e8", blue="#c0d6f9", green="#cbe8ba",
+        yellow="#ffe8a3", purple="#dfc7f7", red="#ffaba0",
+        teal="#b5e6e8", white="#ffffff",
+    ),
 }
 
 _active_theme_id: str = "tokyo-night"
@@ -424,8 +468,16 @@ def set_theme(theme_id: str) -> bool:
     global BG_SURFACE, BG_SURFACE_LIGHT, BG_BLUE, BG_GREEN, BG_PURPLE, BG_CYAN
 
     target = theme_id.strip().lower()
-    if target == "catppuccin":
-        target = "catppuccin-mocha"
+    alias_map = {
+        "catppuccin": "catppuccin-mocha",
+        "pastel": "pastel-lavender",
+        "lavender": "pastel-lavender",
+        "sakura": "pastel-sakura",
+        "mint": "pastel-mint",
+        "peach": "pastel-peach",
+    }
+    if target in alias_map:
+        target = alias_map[target]
     if target not in THEMES:
         # Check by display name match
         matched = next((t for t in THEMES.values() if t.display_name.lower() == target), None)

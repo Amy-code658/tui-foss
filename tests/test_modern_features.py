@@ -39,11 +39,11 @@ from cybershell.ui.command_center import render_command_center, PALETTE_ACTIONS
 
 
 class TestThemes(unittest.TestCase):
-    """Verify 13 developer color themes and switching mechanism."""
+    """Verify 17 developer and pastel color themes and switching mechanism."""
 
-    def test_thirteen_themes_registered(self) -> None:
+    def test_seventeen_themes_registered(self) -> None:
         themes = list_themes()
-        self.assertEqual(len(themes), 13)
+        self.assertEqual(len(themes), 17)
         theme_ids = {t.id for t in themes}
         required_ids = {
             "tokyo-night",
@@ -59,8 +59,22 @@ class TestThemes(unittest.TestCase):
             "monokai",
             "rose-pine",
             "foss",
+            "pastel-lavender",
+            "pastel-sakura",
+            "pastel-mint",
+            "pastel-peach",
         }
         self.assertTrue(required_ids.issubset(theme_ids))
+
+    def test_pastel_theme_aliases(self) -> None:
+        self.assertTrue(set_theme("sakura"))
+        self.assertEqual(get_active_theme().id, "pastel-sakura")
+        self.assertTrue(set_theme("pastel-mint"))
+        self.assertEqual(get_active_theme().id, "pastel-mint")
+        self.assertTrue(set_theme("peach"))
+        self.assertEqual(get_active_theme().id, "pastel-peach")
+        self.assertTrue(set_theme("lavender"))
+        self.assertEqual(get_active_theme().id, "pastel-lavender")
 
     def test_theme_switching(self) -> None:
         success = set_theme("dracula")
@@ -154,6 +168,14 @@ class TestTerminalPet(unittest.TestCase):
         # Check no emojis in sprites
         for char in joined:
             self.assertLess(ord(char), 0x1000, f"Emoji or non-ascii/latin character found: {char!r}")
+
+    def test_cute_penguin_pet_styling(self) -> None:
+        styled_lines = self.pet.render(width=24, height=6, styled=True)
+        self.assertEqual(len(styled_lines), 6)
+        joined = "".join(styled_lines)
+        self.assertIn("121;192;255", joined)
+        self.assertIn("241;224;90", joined)
+        self.assertIn(">v<", joined)
 
 
 class TestAmbienceManager(unittest.TestCase):
@@ -337,6 +359,18 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         penguin = get_foss_penguin(styled=False)
         self.assertTrue(len(penguin.splitlines()) >= 5)
         self.assertIn("() ()", penguin)
+
+    def test_thick_heavy_borders(self) -> None:
+        from cybershell.ui.renderer import draw_fixed_panel, HEAVY_TOP_LEFT, HEAVY_BOTTOM_LEFT
+        panel = draw_fixed_panel("TEST", ["Line 1", "Line 2"], width=30, height=6, styled=False)
+        self.assertEqual(len(panel), 6)
+        self.assertTrue(panel[0].startswith(HEAVY_TOP_LEFT))
+        self.assertTrue(panel[-1].startswith(HEAVY_BOTTOM_LEFT))
+
+    def test_progress_bar_rendering(self) -> None:
+        from cybershell.ui.renderer import draw_progress_bar
+        bar = draw_progress_bar(5, 10, width=10, styled=False)
+        self.assertEqual(bar, "█████░░░░░")
 
 
 if __name__ == "__main__":

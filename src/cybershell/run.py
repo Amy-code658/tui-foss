@@ -93,6 +93,7 @@ from cybershell.ui.renderer import (
     draw_question_card,
     draw_overthewire_card,
     draw_statusline,
+    draw_progress_bar,
     draw_split_panels,
     draw_opencode_layout,
     pad_to_width,
@@ -102,7 +103,25 @@ from cybershell.ui.renderer import (
 from cybershell.ui.search import fuzzy_search_commands, render_telescope_results
 from cybershell.ui.rpg_app import RPGApp
 from cybershell.ui.animation import CelebrationEffect, ScreenTransition, Typewriter
-from cybershell.ui.theme import get_active_theme, gradient_text, pill, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_BG_DARK, HEX_BLUE, FG_BORDER, RESET, BOLD, FG_WHITE, FG_MUTED
+from cybershell.ui.theme import (
+    get_active_theme,
+    set_theme,
+    list_themes,
+    THEMES,
+    gradient_text,
+    pill,
+    HEX_CYAN,
+    HEX_PURPLE,
+    HEX_GREEN,
+    HEX_YELLOW,
+    HEX_BG_DARK,
+    HEX_BLUE,
+    FG_BORDER,
+    RESET,
+    BOLD,
+    FG_WHITE,
+    FG_MUTED,
+)
 from cybershell.ui.pet import get_terminal_pet
 from cybershell.ui.ambience import get_ambience_manager
 from cybershell.ui.dashboard import view_progress_dashboard, render_progress_dashboard
@@ -606,13 +625,14 @@ def render_opening_screen(
         f"  {BOLD}{CYAN}:: Ambient Rain    {RESET}: {WHITE}Physics-based falling rain with light shading ('rain'){RESET}",
         f"  {BOLD}{CYAN}:: Calm Animations {RESET}: {WHITE}Subtle non-intrusive status indicators ('anim'){RESET}",
         f"  {BOLD}{CYAN}:: Progress Stats  {RESET}: {WHITE}Skill dashboard, completion & category mastery (':progress'){RESET}",
-        f"  {BOLD}{CYAN}:: 13 Color Themes {RESET}: {WHITE}FOSS, Tokyo Night, Dracula, Nord, Gruvbox & more (':theme'){RESET}",
+        f"  {BOLD}{CYAN}:: 17 Color Themes {RESET}: {WHITE}FOSS, Pastel Lavender, Pastel Sakura, Dracula, Nord & more (':theme'){RESET}",
         "",
     ]
     func_panel_lines = draw_panel(func_title, func_content, inner_w, styled=True, border_color=fg_hex(HEX_BLUE))
 
     # 4. Minimal Boxy Menu Layout
     menu_title = "MAIN DIRECTORY • CHOOSE A DESTINATION"
+    th = get_active_theme()
 
     if has_save:
         options = [
@@ -624,6 +644,7 @@ def render_opening_screen(
             ("6", "Chmod Perm Decoder", "Decode permissions & solve security doors"),
             ("7", "Arcade Mini-Games", "Terminal Snake, Vim Dojo, Typing Dojo"),
             ("8", "Field Manual & Rules", "Read the adventure manual & rules"),
+            ("T", "Theme Selector", f"Active: {th.display_name} (type 'foss', 'sakura', etc.)"),
             ("0", "Exit Adventure", "Save and exit"),
         ]
     else:
@@ -635,6 +656,7 @@ def render_opening_screen(
             ("5", "Chmod Perm Decoder", "Decode permissions & solve security doors"),
             ("6", "Arcade Mini-Games", "Terminal Snake, Vim Dojo, Typing Dojo"),
             ("7", "Field Manual & Rules", "Read the adventure manual & rules"),
+            ("T", "Theme Selector", f"Active: {th.display_name} (type 'foss', 'sakura', etc.)"),
             ("0", "Exit Adventure", "Exit the game"),
         ]
 
@@ -645,6 +667,8 @@ def render_opening_screen(
         c = colors[int(num) % len(colors)] if num.isdigit() else HEX_PURPLE
         prefix = f"{pill(num, HEX_BG_DARK, c)}  {CYAN}{BOLD}{label:<22}{RESET}"
         menu_content.append(f"  {prefix} {WHITE}{summary}{RESET}")
+    menu_content.append("")
+    menu_content.append(f"  {BOLD}{th.fg_yellow}Pro-tip:{RESET} {th.fg_white}Type any theme name directly (e.g. 'foss', 'sakura', 'mint', 'dracula') to switch instantly!{RESET}")
     menu_content.append("")
 
     menu_panel_lines = draw_panel(menu_title, menu_content, inner_w, styled=True, border_color=fg_hex(HEX_PURPLE))
@@ -1191,6 +1215,11 @@ def interactive_game_loop(
                 for line in scenario_lines:
                     task_content.append(f"{theme.fg_cyan}{line}{RESET}")
 
+            # Progress bar below the question / target
+            bar_w = min(20, max(6, task_inner_w - 24))
+            prog_bar = draw_progress_bar(completed_count, total_challenges, width=bar_w, styled=True)
+            task_content.append(f"{theme.fg_yellow}PROGRESS : {RESET}{prog_bar} {theme.fg_white}{completed_count}/{total_challenges}{RESET} {DIM}({pct_prog}%){RESET}")
+
             # Suggested Commands
             suggested = []
             if getattr(active_obj, "command", None):
@@ -1220,17 +1249,17 @@ def interactive_game_loop(
         # 2. Top-Right Pane: Local Docs (Context-Aware & Fuzzy Searchable)
         docs_content: List[str] = []
         if docs_filter_term:
-            filtered_cmds = fuzzy_search_commands(docs_filter_term, app.codex.list_commands(), limit=12)
+            filtered_cmds = fuzzy_search_commands(docs_filter_term, app.codex.list_commands(), limit=16)
             docs_content.append(f"{theme.fg_yellow}Search: '{docs_filter_term}' ({len(filtered_cmds)} matches){RESET}")
         else:
             quest_cmds = suggested if active_obj else []
             filtered_cmds = app.codex.get_contextual_commands(
                 relevant_cmds=quest_cmds,
-                limit=10,
+                limit=16,
             )
-            docs_content.append(f"{DIM}Commands Codex (:cmd to search){RESET}")
+            docs_content.append(f"{DIM}Commands Codex (:cmd / 'search'){RESET}")
 
-        for cmd in filtered_cmds[:10]:
+        for cmd in filtered_cmds[:14]:
             name = cmd.get("name", "")
             desc = cmd.get("purpose") or cmd.get("description", "")
             avail_desc = max(8, docs_inner_w - 8)
@@ -1383,6 +1412,22 @@ def interactive_game_loop(
             terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ anim{RESET}")
             terminal_logs.append(f"{CYAN}[+] Calm animations are now {'ON' if a_on else 'OFF'}.{RESET}")
             continue
+
+        # Direct theme switching (e.g. ':theme foss', 'theme dracula', or typing 'foss', 'sakura', 'nord' directly)
+        theme_cand = ""
+        if input_lower.startswith(":theme ") or input_lower.startswith("theme "):
+            theme_cand = user_input.split(maxsplit=1)[1].strip()
+        else:
+            all_theme_names = set(THEMES.keys()) | {t.display_name.lower() for t in THEMES.values()} | {"pastel", "lavender", "sakura", "mint", "peach", "catppuccin"}
+            if input_lower in all_theme_names:
+                theme_cand = input_lower
+
+        if theme_cand:
+            if set_theme(theme_cand):
+                new_th = get_active_theme()
+                terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+                terminal_logs.append(f"{BOLD}{new_th.fg_green}[✓] Active theme switched to {new_th.display_name}!{RESET}")
+                continue
 
         if input_lower in (":theme", "theme", "themes"):
             run_theme_selector(width=width)
@@ -1743,7 +1788,16 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
             print(pad_to_width(s_l, width, align="center"))
         print()
         try:
-            input()
+            splash_in = input().strip()
+            if splash_in:
+                s_cand = splash_in.lower()
+                for pfx in (":theme ", "theme ", ":theme", "theme"):
+                    if s_cand.startswith(pfx):
+                        s_cand = s_cand[len(pfx):].strip()
+                        break
+                all_theme_names = set(THEMES.keys()) | {t.display_name.lower() for t in THEMES.values()} | {"pastel", "lavender", "sakura", "mint", "peach", "catppuccin"}
+                if s_cand in all_theme_names or splash_in.lower() in all_theme_names:
+                    set_theme(s_cand if s_cand in all_theme_names else splash_in.lower())
         except (KeyboardInterrupt, EOFError):
             return
 
@@ -1755,7 +1809,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
 
         max_option = 8 if has_save else 7
         try:
-            choice = input(f"\n{YELLOW}Choose an option [0-{max_option}] (default: 1): {RESET}").strip()
+            choice = input(f"\n{YELLOW}Choose an option [0-{max_option}, T] (default: 1): {RESET}").strip()
         except (KeyboardInterrupt, EOFError):
             print(f"\n{CYAN}See you next time! Session closed.{RESET}\n")
             break
@@ -1767,6 +1821,27 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
         if choice_lower in ("0", "exit", "quit", "q"):
             print(f"\n{CYAN}See you next time! Session closed.{RESET}\n")
             break
+
+        # Direct theme switching in the first interface
+        direct_theme_target = choice_lower
+        for pfx in (":theme ", "theme ", ":theme", "theme"):
+            if direct_theme_target.startswith(pfx):
+                direct_theme_target = direct_theme_target[len(pfx):].strip()
+                break
+
+        all_theme_names = set(THEMES.keys()) | {t.display_name.lower() for t in THEMES.values()} | {"pastel", "lavender", "sakura", "mint", "peach", "catppuccin"}
+        if direct_theme_target in all_theme_names or choice_lower in all_theme_names:
+            target_to_set = direct_theme_target if direct_theme_target in all_theme_names else choice_lower
+            if set_theme(target_to_set):
+                new_theme = get_active_theme()
+                print(f"\n{BOLD}{new_theme.fg_green}[✓] Active theme switched to {new_theme.display_name}!{RESET}")
+                import time
+                time.sleep(0.35)
+                continue
+
+        if choice_lower in ("t", "theme", ":theme"):
+            run_theme_selector(width)
+            continue
 
         if has_save:
             if choice_lower in ("1", "continue", "resume", "c", "start", "e"):

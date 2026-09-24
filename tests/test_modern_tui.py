@@ -336,7 +336,7 @@ class TestFuzzySearch(unittest.TestCase):
         self.assertGreater(len(lines), 4)
 
         # First line should be top border
-        self.assertTrue(lines[0].startswith("\033[") or lines[0].startswith("╭"))
+        self.assertTrue(lines[0].startswith("\033[") or lines[0].startswith("╭") or lines[0].startswith("┏"))
 
         # Telescope header should be present
         combined = "\n".join(lines)

@@ -621,6 +621,234 @@ COMMANDS: Dict[str, Dict[str, Any]] = {
         ],
         "related": ["vim", "cat"],
     },
+    "diff": {
+        "name": "diff",
+        "description": "Compare files line by line.",
+        "purpose": "Find differences between two files.",
+        "syntax": "diff [options] <file1> <file2>",
+        "explanation": "Compares two files line by line and highlights added, modified, or removed lines.",
+        "example": "diff old.txt new.txt",
+        "flags": {
+            "-u": "Output unified context diff format.",
+            "-y": "Output side-by-side comparison.",
+        },
+        "examples": [
+            "diff file1.txt file2.txt",
+            "diff -u original.py modified.py",
+        ],
+        "combos": [
+            "diff -u file1 file2   # see unified code diff",
+        ],
+        "related": ["patch", "git"],
+    },
+    "tar": {
+        "name": "tar",
+        "description": "Tape archiver - package and extract archive files.",
+        "purpose": "Creates and extracts compressed archive files (.tar.gz).",
+        "syntax": "tar [options] [archive] [target...]",
+        "explanation": "Bundles multiple files and folders into a single archive, optionally compressed.",
+        "example": "tar -czvf backup.tar.gz project/",
+        "flags": {
+            "-czvf": "Create gzipped archive with verbose output.",
+            "-xzvf": "Extract gzipped archive files.",
+            "-tf": "List table of contents of an archive.",
+        },
+        "examples": [
+            "tar -czvf archive.tar.gz docs/",
+            "tar -xzvf archive.tar.gz",
+        ],
+        "combos": [
+            "tar -czvf project.tar.gz .   # archive directory",
+        ],
+        "related": ["gzip", "zip"],
+    },
+    "curl": {
+        "name": "curl",
+        "description": "Transfer data from or to a server using web protocols.",
+        "purpose": "Fetches web URLs and API endpoints from the command line.",
+        "syntax": "curl [options] [url]",
+        "explanation": "Sends HTTP/HTTPS network requests and downloads raw web responses.",
+        "example": "curl https://icanhazip.com",
+        "flags": {
+            "-I": "Fetch HTTP response headers only.",
+            "-O": "Save remote file with its original filename.",
+            "-s": "Silent mode, hide progress meter.",
+        },
+        "examples": [
+            "curl https://example.com",
+            "curl -I https://example.com",
+            "curl -O https://example.com/data.json",
+        ],
+        "combos": [
+            "curl -s https://api.site/data | grep 'status'   # fetch and filter",
+        ],
+        "related": ["wget", "ssh"],
+    },
+    "wget": {
+        "name": "wget",
+        "description": "Non-interactive network downloader.",
+        "purpose": "Downloads files directly from the web.",
+        "syntax": "wget [options] [url]",
+        "explanation": "Retrieves files via HTTP, HTTPS, and FTP in the background.",
+        "example": "wget https://example.com/file.zip",
+        "flags": {
+            "-c": "Resume partially-downloaded file.",
+            "-q": "Quiet mode with no screen output.",
+        },
+        "examples": [
+            "wget https://example.com/installer.sh",
+        ],
+        "combos": [
+            "wget url → tar -xzvf archive.tar.gz   # download and unpack",
+        ],
+        "related": ["curl"],
+    },
+    "df": {
+        "name": "df",
+        "description": "Report file system disk space usage.",
+        "purpose": "Displays available and used disk space on mounted drives.",
+        "syntax": "df [options]",
+        "explanation": "Shows disk space usage breakdown for all mounted storage devices.",
+        "example": "df -h",
+        "flags": {
+            "-h": "Human-readable sizes (GB, MB).",
+            "-T": "Print filesystem type.",
+        },
+        "examples": [
+            "df -h",
+        ],
+        "combos": [
+            "df -h   # check free disk space",
+        ],
+        "related": ["du", "ls"],
+    },
+    "du": {
+        "name": "du",
+        "description": "Estimate file space usage.",
+        "purpose": "Measures directory and file disk consumption.",
+        "syntax": "du [options] [path]",
+        "explanation": "Summarizes disk usage of directory trees and individual files.",
+        "example": "du -sh ~/project",
+        "flags": {
+            "-s": "Display only a total summary for each argument.",
+            "-h": "Print sizes in human-readable format.",
+        },
+        "examples": [
+            "du -sh *",
+            "du -h --max-depth=1",
+        ],
+        "combos": [
+            "du -sh * | sort -h   # find largest folders",
+        ],
+        "related": ["df", "ls"],
+    },
+    "top": {
+        "name": "top",
+        "description": "Display Linux processes in an interactive real-time screen.",
+        "purpose": "Monitors CPU, memory, and running system tasks.",
+        "syntax": "top",
+        "explanation": "Provides a live dynamic view of running system tasks and resource utilization.",
+        "example": "top",
+        "flags": {},
+        "examples": [
+            "top",
+        ],
+        "combos": [
+            "top   # monitor active CPU and memory consumers",
+        ],
+        "related": ["ps", "kill"],
+    },
+    "uname": {
+        "name": "uname",
+        "description": "Print system information.",
+        "purpose": "Displays Linux kernel version and hardware architecture.",
+        "syntax": "uname [options]",
+        "explanation": "Prints OS name, kernel release, and hardware architecture details.",
+        "example": "uname -a",
+        "flags": {
+            "-a": "Print all system information in sequence.",
+            "-r": "Print operating system kernel release.",
+        },
+        "examples": [
+            "uname -a",
+            "uname -r",
+        ],
+        "combos": [
+            "uname -a   # check kernel and system architecture",
+        ],
+        "related": ["whoami", "hostname"],
+    },
+    "which": {
+        "name": "which",
+        "description": "Locate a command executable in the user's PATH.",
+        "purpose": "Shows the exact path of a program binary.",
+        "syntax": "which <command>",
+        "explanation": "Searches directories listed in PATH and outputs the absolute path of the command executable.",
+        "example": "which python3",
+        "flags": {},
+        "examples": [
+            "which python3",
+            "which git",
+        ],
+        "combos": [
+            "which bash → ls -l /bin/bash   # find and inspect executable",
+        ],
+        "related": ["find", "type"],
+    },
+    "history": {
+        "name": "history",
+        "description": "GNU History Library command log.",
+        "purpose": "Displays previous commands executed in the current session.",
+        "syntax": "history",
+        "explanation": "Shows the list of previously entered commands with their line numbers.",
+        "example": "history",
+        "flags": {},
+        "examples": [
+            "history",
+            "history | grep 'git'",
+        ],
+        "combos": [
+            "history | grep 'ssh'   # recall previous commands",
+        ],
+        "related": ["clear"],
+    },
+    "sed": {
+        "name": "sed",
+        "description": "Stream editor for filtering and transforming text.",
+        "purpose": "Find and replace text patterns across files.",
+        "syntax": "sed [options] 's/find/replace/g' <file>",
+        "explanation": "Performs basic text transformations on an input stream or file.",
+        "example": "sed 's/foo/bar/g' file.txt",
+        "flags": {
+            "-i": "Edit file in-place instead of printing to stdout.",
+        },
+        "examples": [
+            "sed 's/old/new/g' notes.txt",
+        ],
+        "combos": [
+            "cat file.txt | sed 's/foo/bar/g'   # pipeline replacement",
+        ],
+        "related": ["awk", "grep"],
+    },
+    "awk": {
+        "name": "awk",
+        "description": "Pattern scanning and text processing language.",
+        "purpose": "Extracts columns and fields from formatted tabular text.",
+        "syntax": "awk '{print $1, $2}' <file>",
+        "explanation": "Processes text line by line and extracts specific whitespace-delimited columns.",
+        "example": "awk '{print $1}' table.txt",
+        "flags": {
+            "-F": "Specify custom input field separator delimiter.",
+        },
+        "examples": [
+            "awk '{print $1}' data.txt",
+            "awk -F: '{print $1}' /etc/passwd",
+        ],
+        "combos": [
+            "ps aux | awk '{print $2, $11}'   # print PID and process name",
+        ],
+        "related": ["sed", "grep", "cut"],
+    },
 }
 
 
