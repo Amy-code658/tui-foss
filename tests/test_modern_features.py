@@ -414,6 +414,59 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         bar = draw_progress_bar(5, 10, width=10, styled=False)
         self.assertEqual(bar, "█████░░░░░")
 
+    def test_interactive_task_options_and_terminal_prompt(self) -> None:
+        from cybershell.contracts import Objective
+        from cybershell.ui.renderer import draw_opencode_layout, visual_len
+        from cybershell.ui.theme import get_active_theme
+
+        th = get_active_theme()
+        obj = Objective(
+            id="test_obj",
+            description="Find where you are located.",
+            question="Which command shows your current working directory?",
+            options=[
+                "ls - list files",
+                "pwd - print working directory",
+                "cd - change directory",
+                "cat - read file",
+            ],
+            correct_option="B",
+        )
+
+        task_inner_w = 40
+        q_text = getattr(obj, "question", "") or obj.description
+        task_content = [
+            f"LEVEL 01 // TEST",
+            "",
+            f"QUESTION : {q_text}",
+            f"PROGRESS : [████░░░░] 1/2 (50%)",
+            "",
+        ]
+        for i, opt in enumerate(obj.options):
+            lbl = ["A", "B", "C", "D"][i]
+            task_content.append(f"  [{lbl}] {opt}")
+        task_content.append("")
+        task_content.append("INTEL    : Type command or [A-D]")
+
+        joined = "\n".join(task_content)
+        self.assertIn("QUESTION :", joined)
+        self.assertIn("PROGRESS :", joined)
+        self.assertIn("[A]", joined)
+        self.assertIn("[B]", joined)
+        self.assertIn("INTEL    :", joined)
+        self.assertNotIn("COMMANDS :", joined)
+
+        # In-terminal layout rendering
+        prompt = "amy@cybershell:~$ "
+        layout = draw_opencode_layout(
+            "YOUR TASK", task_content,
+            "TERMINAL", [prompt],
+            "LOCAL DOCS", ["pwd", "ls"],
+            ["pet"],
+            width=80, height=24, gap=1, styled=False
+        )
+        self.assertIn(prompt, layout)
+
 
 if __name__ == "__main__":
     unittest.main()

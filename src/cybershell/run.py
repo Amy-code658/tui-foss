@@ -1194,9 +1194,6 @@ def interactive_game_loop(
     # Initial logs
     ScreenTransition.wipe_screen(delay=0.005)
     if player.current_sector == 0 and not quest.is_completed:
-        Typewriter.stream_text("[+] Initializing Level 1: Look Around...", styled_prefix=GREEN, delay=0.015)
-        Typewriter.stream_text("Solve the challenge question above by typing the command or option letter!", styled_prefix=CYAN, delay=0.015)
-        Typewriter.stream_text("Tip: Type '?' for a hint, 'map' for level map.", styled_prefix=DIM, delay=0.015)
         terminal_logs: List[str] = [
             f"{GREEN}[+] Initializing Level 1: Look Around...{RESET}",
             f"{CYAN}Solve the challenge question above by typing the command or option letter!{RESET}",
@@ -1204,7 +1201,6 @@ def interactive_game_loop(
         ]
     else:
         lvl_display = player.current_sector + 1
-        Typewriter.stream_text(f"[+] Entering Level {lvl_display}/15: {quest.sector_name}", styled_prefix=GREEN, delay=0.015)
         terminal_logs = [
             f"{GREEN}[+] Entering Level {lvl_display}/15: {quest.sector_name}{RESET}",
             f"{DIM}Type 'help' for commands, '?' for a hint, 'map' for level map.{RESET}",
@@ -1258,25 +1254,32 @@ def interactive_game_loop(
         task_content.append(f"{theme.fg_yellow}LEVEL {player.current_sector + 1:02d} // {quest.sector_name.upper()}{RESET}  {DIM}({completed_count} of {total_challenges} complete - {pct_prog}%){RESET}")
         if active_obj:
             task_content.append("")
-            # Target (clean wrapping with indent to prevent line overflow)
-            target_str = f"TARGET   : {active_obj.description}"
-            target_lines = textwrap.wrap(target_str, width=task_inner_w, subsequent_indent="           ")
-            for i, line in enumerate(target_lines):
+            # 1. Question (Clean wrapping)
+            q_text = getattr(active_obj, "question", "") or active_obj.description
+            q_lines = textwrap.wrap(f"QUESTION : {q_text}", width=task_inner_w, subsequent_indent="           ")
+            for i, line in enumerate(q_lines):
                 task_content.append(f"{BOLD}{theme.fg_white}{line}{RESET}" if i == 0 else f"{theme.fg_white}{line}{RESET}")
 
-            # Scenario (clean wrapping with indent)
-            scenario_text = getattr(active_obj, "scenario", "") or getattr(quest, "lore", "")[:70]
-            if scenario_text:
-                scenario_lines = textwrap.wrap(f"SCENARIO : {scenario_text}", width=task_inner_w, subsequent_indent="           ")
-                for line in scenario_lines:
-                    task_content.append(f"{theme.fg_cyan}{line}{RESET}")
-
-            # Progress bar below the question / target
-            bar_w = min(20, max(6, task_inner_w - 24))
+            # 2. Progress bar just below the question
+            bar_w = min(16, max(6, task_inner_w - 20))
             prog_bar = draw_progress_bar(completed_count, total_challenges, width=bar_w, styled=True)
             task_content.append(f"{theme.fg_yellow}PROGRESS : {RESET}{prog_bar} {theme.fg_white}{completed_count}/{total_challenges}{RESET} {DIM}({pct_prog}%){RESET}")
 
-            # Suggested Commands
+            # 3. 4 Options (No commands list in question box!)
+            opt_labels = ["A", "B", "C", "D"]
+            if getattr(active_obj, "options", None):
+                task_content.append("")
+                for i, opt in enumerate(active_obj.options[:4]):
+                    lbl = opt_labels[i] if i < len(opt_labels) else str(i + 1)
+                    task_content.append(f"  {theme.fg_cyan}[{lbl}]{RESET} {theme.fg_white}{opt}{RESET}")
+
+            # 4. Intel (Only question, options, intel, and progress needed)
+            task_content.append("")
+            intel_lines = textwrap.wrap("INTEL    : Type command or [A-D] | 'hint' for clues | ':cmd' for menu", width=task_inner_w, subsequent_indent="           ")
+            for line in intel_lines:
+                task_content.append(f"{DIM}{line}{RESET}")
+
+            # Compute suggested for local docs in right pane without showing in question box
             suggested = []
             if getattr(active_obj, "command", None):
                 for c in active_obj.command.replace("|", ",").split(","):
@@ -1291,14 +1294,8 @@ def interactive_game_loop(
             for c in ["pwd", "ls", "cd", "cat", "man"]:
                 if c not in suggested and len(suggested) < 4:
                     suggested.append(c)
-            cmd_str = ", ".join(suggested[:4])
-            task_content.append(f"{theme.fg_green}COMMANDS : {cmd_str}{RESET}")
-
-            # Tactical Intel & Reset option
-            intel_lines = textwrap.wrap("INTEL    : Type 'hint' for clues | 'reset' to restart | ':cmd' for menu", width=task_inner_w, subsequent_indent="           ")
-            for line in intel_lines:
-                task_content.append(f"{DIM}{line}{RESET}")
         else:
+            suggested = []
             task_content.append("")
             task_content.append(f"{theme.fg_green}[+] Sector objectives complete! Type 'next' or explore freely.{RESET}")
 
@@ -1331,11 +1328,14 @@ def interactive_game_loop(
         pet.set_player_name(player.character_name)
         mascot_content = pet.render(width=docs_inner_w + 2, height=6, styled=True)
 
-        # 4. Render 4-Pane Opencode Layout
+        # 4. Render 4-Pane Opencode Layout with commandline inside the TERMINAL pane
         layout_h = max(14, min(height - 4, 28))
+        active_prompt = f"{BOLD}{theme.fg_green}{u_name}@cybershell{RESET}:{BOLD}{theme.fg_blue}{cwd_short}{RESET}$ "
+        display_term_logs = list(terminal_logs) + [active_prompt]
+
         layout = draw_opencode_layout(
             task_title="YOUR TASK", task_content=task_content,
-            term_title="TERMINAL", term_content=terminal_logs,
+            term_title="TERMINAL", term_content=display_term_logs,
             docs_title="LOCAL DOCS", docs_content=docs_content,
             mascot_content=mascot_content,
             width=width, height=layout_h, gap=1, styled=True
@@ -1352,9 +1352,25 @@ def interactive_game_loop(
         sys.stdout.write(pad_to_width(footer, usable_w, align="center") + "\n")
         sys.stdout.flush()
 
+        # Calculate exact row and col of the active prompt inside the TERMINAL pane
+        needed_task_height = len(task_content) + 3
+        max_task_height = max(5, layout_h - 8)
+        task_height = max(5, min(needed_task_height, max_task_height))
+        term_height = layout_h - task_height
+        term_max_content = term_height - 3
+        sliced_term = display_term_logs[-term_max_content:] if len(display_term_logs) > term_max_content else display_term_logs
+        prompt_idx = len(sliced_term) - 1
+        rain_offset = 1 if ambience.rain_enabled else 0
+        prompt_row = rain_offset + task_height + 3 + prompt_idx
+        prompt_col = 3 + visual_len(active_prompt)
+
         try:
-            prompt = f"{BOLD}{theme.fg_green}{u_name}@cybershell{RESET}:{BOLD}{theme.fg_blue}{cwd_short}{RESET}$ "
-            user_input = input(prompt).strip()
+            if sys.stdin.isatty():
+                sys.stdout.write(f"\033[{prompt_row};{prompt_col}H")
+                sys.stdout.flush()
+                user_input = input("").strip()
+            else:
+                user_input = input("").strip()
         except (KeyboardInterrupt, EOFError):
             save_game(player, cadet_mode)
             print(f"\n{theme.fg_cyan}Returning to Main Menu...{RESET}")
@@ -1703,26 +1719,11 @@ def interactive_game_loop(
                 elif quest.sector_id not in player.completed_sectors:
                     player.completed_sectors.append(quest.sector_id)
 
-                celebration = CelebrationEffect.render_celebration(
-                    title=f"LEVEL {quest.sector_id + 1} COMPLETED!",
-                    subtitle=f"Sector: {quest.sector_name.upper()} | +{reward_sum} XP",
-                    width=width,
-                    animate=False,
-                )
-                for c_line in celebration.splitlines():
-                    terminal_logs.append(c_line)
+                # Store item in player inventory without crowded screen spam
+                if quest.reward_item and hasattr(player, "inventory") and quest.reward_item not in player.inventory:
+                    player.inventory.append(quest.reward_item)
 
-                # Show badge status change only after level completion (not in between tasks)
-                curr_badges = list(getattr(player, "badges", []))
-                level_badges = [b for b in curr_badges if b not in level_start_badges]
-                if level_badges:
-                    for nb in level_badges:
-                        terminal_logs.append(f"{YELLOW}[+] BADGE UNLOCKED: [{nb}]{RESET}")
-                    terminal_logs.append(f"{CYAN}Explorer Badges: {len(curr_badges)}/15 Unlocked{RESET}")
-                level_start_badges = list(curr_badges)
-
-                if quest.reward_item:
-                    terminal_logs.append(f"{YELLOW}[+] ITEM ACQUIRED: {quest.reward_item.name} - {quest.reward_item.description}{RESET}")
+                terminal_logs.append(f"{GREEN}{BOLD}[✓] Level {quest.sector_id + 1} completed! (+{reward_sum} XP){RESET}")
 
                 next_sector = player.current_sector + 1
                 if next_sector in all_quests:
@@ -1730,35 +1731,15 @@ def interactive_game_loop(
                     quest = all_quests[next_sector]
                     vfs.load_sector(next_sector, quest)
                     save_game(player, cadet_mode)
-
-                    unlock_banner = get_level_unlocked_banner(
-                        sector_num=next_sector + 1,
-                        sector_name=quest.sector_name,
-                        width=min(width - 4, 60),
-                        styled=True,
-                    )
-                    for u_line in unlock_banner.splitlines():
-                        terminal_logs.append(u_line)
-                    Typewriter.stream_text(f'"{quest.lore[:80]}..."', delay=0.02, styled_prefix=f"{GREEN}Guide {quest.npc_name}: ")
-                    terminal_logs.append(f"{GREEN}Guide {quest.npc_name}: \"{quest.lore[:80]}...\"{RESET}")
+                    terminal_logs.append(f"{CYAN}Entering Level {next_sector + 1}: {quest.sector_name}{RESET}")
                 else:
                     save_game(player, cadet_mode)
-                    for v_line in get_victory_banner(styled=True).splitlines():
-                        terminal_logs.append(v_line)
+                    terminal_logs.append(f"{GREEN}{BOLD}[✓] All 15 levels completed! Congratulations!{RESET}")
             else:
-                # Clean slate for next question in this level! ("one task kazhiyumbo")
-                completed_names = []
-                for item in newly_completed:
-                    matched_obj = next((o for o in quest.objectives if o.id == item), None) if isinstance(item, str) else item
-                    desc = matched_obj.description if matched_obj else str(item)
-                    completed_names.append(desc)
-                summary_text = " & ".join(completed_names)
-                terminal_logs.append(f"{GREEN}✓ Task Cleared: {summary_text} (+{reward_sum} XP){RESET}")
-                terminal_logs.append(f"{CYAN}Next objective initialized. Inspect mission briefing above.{RESET}")
+                terminal_logs.append(f"{GREEN}[✓] Objective cleared! (+{reward_sum} XP){RESET}")
 
         if player.level > old_level:
             terminal_logs.append(f"{MAGENTA}{BOLD}[+] LEVEL UP! You reached Level {player.level}! Title: {player.rank}{RESET}")
-            Typewriter.stream_text(f"[+] LEVEL UP! You reached Level {player.level}! Title: {player.rank}", delay=0.015, styled_prefix=f"{MAGENTA}{BOLD}")
 
 
 # =============================================================================
