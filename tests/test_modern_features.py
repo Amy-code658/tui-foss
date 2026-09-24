@@ -371,7 +371,7 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         from cybershell.ui.ascii_art import get_foss_penguin
         penguin = get_foss_penguin(styled=False)
         self.assertTrue(len(penguin.splitlines()) >= 5)
-        self.assertIn("() ()", penguin)
+        self.assertIn("o_o", penguin)
 
     def test_foss_penguin_frames_and_welcome(self) -> None:
         from cybershell.ui.ascii_art import get_foss_penguin
@@ -384,10 +384,10 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         p_wave = get_foss_penguin(styled=False, frame="wave")
         p_happy = get_foss_penguin(styled=False, frame="happy")
         
-        self.assertIn("() ()", p_normal)
-        self.assertIn("-- --", p_blink)
-        self.assertIn("\\.---./", p_wave)
-        self.assertIn("^^ ^^", p_happy)
+        self.assertIn("o_o", p_normal)
+        self.assertIn("- -", p_blink)
+        self.assertIn("o_o", p_wave)
+        self.assertIn("^_^", p_happy)
         
         # Non-interactive executions (must not raise or block)
         from unittest.mock import patch
@@ -532,11 +532,17 @@ class TestMultiUserProfileAndReadlineShortcuts(unittest.TestCase):
 
     def test_ctrl_space_pexpect_pty_macro(self) -> None:
         """Verify sending NUL (Ctrl+Space \x00) translates into :cmd through readline."""
+        import os
+        import sys
         import pexpect
+        src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+        env = dict(os.environ)
+        env["PYTHONPATH"] = f"{src_path}:{env.get('PYTHONPATH', '')}".rstrip(":")
         child = pexpect.spawn(
-            "python3",
+            sys.executable,
             ["-c", "from cybershell.run import configure_readline_bindings; configure_readline_bindings(); x = input('TEST> '); print('RESULT:' + x)"],
             encoding="utf-8",
+            env=env,
         )
         child.expect("TEST> ")
         child.send(chr(0)) # ASCII NUL = Ctrl+Space

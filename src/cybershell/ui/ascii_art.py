@@ -269,18 +269,13 @@ def get_siren_banner(text: str = "", width: int = 76, styled: bool = False) -> s
 
 
 FOSS_PENGUIN: str = """\
-           .---.
-          /     \\
-         | () () |
-          \\  ^  /
-         .-`---'-.
-        /  .---.  \\
-       |  /     \\  |
-       | |       | |
-       |  \\     /  |
-        \\  `---'  /
-        .' (___) '.
-       (____/ \\____)"""
+      .--.
+     |o_o |
+     |:_/ |
+    //   \\ \\
+   (|     | )
+  /'\\_   _/`\\
+  \\___)===(___/"""
 
 
 def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
@@ -290,38 +285,47 @@ def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
         styled: If True, apply theme ANSI colors.
         frame: Animation state ('normal', 'blink', 'wave', 'happy').
     """
-    eye_str = "() ()"
-    beak_str = "^"
-    top_offset = "          "
-    wing_left = " "
-    wing_right = " "
-
-    if frame == "blink":
-        eye_str = "-- --"
-    elif frame == "happy":
-        eye_str = "^^ ^^"
-        beak_str = "v"
-    elif frame == "wave":
-        wing_left = "\\"
-        wing_right = "/"
-
     if not styled:
-        if frame == "normal":
-            return FOSS_PENGUIN
-        lines_raw = [
-            f"          {wing_left}.---.{wing_right}",
-            r"          /     \\",
-            f"         | {eye_str} |",
-            f"          \\  {beak_str}  /",
-            r"         .-`---'-.",
-            r"        /  .---.  \\",
-            r"       |  /     \\  |",
-            r"       | |       | |",
-            r"       |  \\     /  |",
-            r"        \\  `---'  /",
-            r"        .' (___) '.",
-            r"       (____/ \\____)",
-        ]
+        if frame == "wave":
+            lines_raw = [
+                r"      .--.  /",
+                r"     |o_o |//",
+                r"     |:_/ |",
+                r"    //   \ \ ",
+                r"   (|     | )",
+                r"  /'\_   _/`\\",
+                r"  \___)===(___/",
+            ]
+        elif frame == "happy":
+            lines_raw = [
+                r"      .--.",
+                r"     |^_^ |",
+                r"     |:_/ |",
+                r"   \//   \\/ ",
+                r"    |     |",
+                r"  /'\_ _/`\\",
+                r"  \___)===(___/",
+            ]
+        elif frame == "blink":
+            lines_raw = [
+                r"      .--.",
+                r"     |- - |",
+                r"     |:_/ |",
+                r"    //   \ \ ",
+                r"   (|     | )",
+                r"  /'\_   _/`\\",
+                r"  \___)===(___/",
+            ]
+        else:
+            lines_raw = [
+                r"      .--.",
+                r"     |o_o |",
+                r"     |:_/ |",
+                r"    //   \ \ ",
+                r"   (|     | )",
+                r"  /'\_   _/`\\",
+                r"  \___)===(___/",
+            ]
         return "\n".join(lines_raw)
 
     try:
@@ -338,18 +342,44 @@ def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
     rst = RESET
     bld = BOLD
 
-    lines = [
-        f"          {c_blue}{wing_left}.---.{wing_right}{rst}",
-        f"          {c_blue}/     \\{rst}",
-        f"         {c_blue}| {c_white}{eye_str}{c_blue} |{rst}",
-        f"          {c_blue}\\  {bld}{c_yellow}{beak_str}{rst}{c_blue}  /{rst}",
-        f"         {c_blue}.-`---'-.{rst}",
-        f"        {c_blue}/  {c_white}.---.{c_blue}  \\{rst}",
-        f"       {c_blue}|  {c_white}/     \\{c_blue}  |{rst}",
-        f"       {c_blue}| {c_white}|       |{c_blue} |{rst}",
-        f"       {c_blue}|  {c_white}\\     /{c_blue}  |{rst}",
-        f"        {c_blue}\\  {c_white}`---'{c_blue}  /{rst}",
-        f"        {c_blue}.' {bld}{c_yellow}(___){rst}{c_blue} '.{rst}",
-        f"       {bld}{c_yellow}(____/ \\____){rst}",
-    ]
+    if frame == "wave":
+        lines = [
+            f"      {c_blue}.--.  /{rst}",
+            f"     {c_blue}|{c_white}{bld}o_o{rst}{c_blue} |//{rst}",
+            f"     {c_blue}|{c_yellow}{bld}:_/{rst}{c_blue} |{rst}",
+            f"    {c_blue}//   \\ \\{rst}",
+            f"   {c_blue}(| {c_white}    {c_blue}| ){rst}",
+            f"  {c_yellow}/'\\_{c_blue}   {c_yellow}_/`\\{rst}",
+            f"  {c_yellow}\\___)={c_blue}=={c_yellow}(___/{rst}",
+        ]
+    elif frame == "happy":
+        lines = [
+            f"      {c_blue}.--.{rst}",
+            f"     {c_blue}|{c_white}{bld}^_^{rst}{c_blue} |{rst}",
+            f"     {c_blue}|{c_yellow}{bld}:_/{rst}{c_blue} |{rst}",
+            f"   {c_blue}\\//   \\\\/{rst}",
+            f"    {c_blue}| {c_white}    {c_blue}|{rst}",
+            f"  {c_yellow}/'\\_{c_blue}   {c_yellow}_/`\\{rst}",
+            f"  {c_yellow}\\___)={c_blue}=={c_yellow}(___/{rst}",
+        ]
+    elif frame == "blink":
+        lines = [
+            f"      {c_blue}.--.{rst}",
+            f"     {c_blue}|{c_white}{bld}- -{rst}{c_blue} |{rst}",
+            f"     {c_blue}|{c_yellow}{bld}:_/{rst}{c_blue} |{rst}",
+            f"    {c_blue}//   \\ \\{rst}",
+            f"   {c_blue}(| {c_white}    {c_blue}| ){rst}",
+            f"  {c_yellow}/'\\_{c_blue}   {c_yellow}_/`\\{rst}",
+            f"  {c_yellow}\\___)={c_blue}=={c_yellow}(___/{rst}",
+        ]
+    else:
+        lines = [
+            f"      {c_blue}.--.{rst}",
+            f"     {c_blue}|{c_white}{bld}o_o{rst}{c_blue} |{rst}",
+            f"     {c_blue}|{c_yellow}{bld}:_/{rst}{c_blue} |{rst}",
+            f"    {c_blue}//   \\ \\{rst}",
+            f"   {c_blue}(| {c_white}    {c_blue}| ){rst}",
+            f"  {c_yellow}/'\\_{c_blue}   {c_yellow}_/`\\{rst}",
+            f"  {c_yellow}\\___)={c_blue}=={c_yellow}(___/{rst}",
+        ]
     return "\n".join(lines)

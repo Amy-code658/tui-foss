@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import shutil
 import textwrap
+import unicodedata
 from typing import Iterable, List, Optional, Tuple
 
 from .theme import (
@@ -78,8 +79,18 @@ def strip_ansi(text: str) -> str:
 
 
 def visual_len(text: str) -> int:
-    """Return the visible terminal width of text, ignoring ANSI codes."""
-    return len(strip_ansi(text))
+    """Return the visible terminal width of text, ignoring ANSI codes and accounting for wide chars."""
+    raw = strip_ansi(text)
+    total = 0
+    for ch in raw:
+        w = unicodedata.east_asian_width(ch)
+        if w in ("W", "F"):
+            total += 2
+        elif unicodedata.category(ch) in ("Mn", "Me", "Cc", "Cf"):
+            total += 0
+        else:
+            total += 1
+    return total
 
 
 def truncate_styled(text: str, max_width: int, suffix: str = "…") -> str:
@@ -105,8 +116,13 @@ def truncate_styled(text: str, max_width: int, suffix: str = "…") -> str:
             result.append(match.group())
             index = match.end()
             continue
-        result.append(text[index])
-        visible_width += 1
+        ch = text[index]
+        w = unicodedata.east_asian_width(ch)
+        ch_w = 2 if w in ("W", "F") else (0 if unicodedata.category(ch) in ("Mn", "Me", "Cc", "Cf") else 1)
+        if visible_width + ch_w > target_width:
+            break
+        result.append(ch)
+        visible_width += ch_w
         index += 1
 
     return "".join(result) + suffix
@@ -499,8 +515,8 @@ def draw_double_header(
     width = max(24, width)
     inner_width = width - 2
 
-    title_left = "🌱 BYTE'S LINUX ADVENTURE"
-    title_right = f"⭐ {xp} XP"
+    title_left = "BYTE'S LINUX ADVENTURE"
+    title_right = f"{xp} XP"
     space = max(1, inner_width - visual_len(title_left) - visual_len(title_right))
 
     if styled:

@@ -213,6 +213,7 @@ def animate_tux_welcome(
 
     from cybershell.ui.ascii_art import get_foss_penguin
     from cybershell.ui.theme import get_active_theme, BOLD, RESET
+    from cybershell.ui.renderer import pad_to_width
 
     th = get_active_theme()
     frames = ["normal", "blink", "wave", "happy"] if not quick else ["wave", "happy"]
@@ -222,10 +223,10 @@ def animate_tux_welcome(
         sys.stdout.write("\033[H\033[J")
         raw_penguin = get_foss_penguin(styled=True, frame=f)
         for line in raw_penguin.splitlines():
-            sys.stdout.write(line.center(width) + "\n")
+            sys.stdout.write(pad_to_width(line, width, align="center") + "\n")
         sys.stdout.write("\n")
         msg = f"{BOLD}{th.fg_cyan}Welcome to FOSS CyberShell, {th.fg_yellow}{character_name}{th.fg_cyan}!{RESET}"
-        sys.stdout.write(msg.center(width + 16) + "\n")
+        sys.stdout.write(pad_to_width(msg, width, align="center") + "\n")
         sys.stdout.flush()
         time.sleep(delay)
 

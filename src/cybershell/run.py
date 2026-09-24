@@ -692,46 +692,48 @@ def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer") ->
     if not sys.stdin.isatty():
         return current_name if current_name else "Explorer"
 
-    width = max(50, min(width, 76))
-    inner_w = width - 4
+    term_w = max(40, width)
+    box_w = max(44, min(term_w - 4, 76))
+    inner_w = box_w - 4
     theme = get_active_theme()
 
     sys.stdout.write("\033[H\033[J")
     tux_raw = get_foss_penguin(styled=True, frame="wave")
     for line in tux_raw.splitlines():
-        print(pad_to_width(line, width, align="center"))
+        print(pad_to_width(line, term_w, align="center"))
     print()
 
     b_col = theme.fg_blue
     b_rst = RESET
-    border_line = PANEL_HORIZONTAL * (width - 2)
+    border_line = PANEL_HORIZONTAL * (box_w - 2)
     top_border = f"{b_col}{PANEL_TOP_LEFT}{border_line}{PANEL_TOP_RIGHT}{b_rst}"
     bot_border = f"{b_col}{PANEL_BOTTOM_LEFT}{border_line}{PANEL_BOTTOM_RIGHT}{b_rst}"
     div_border = f"{b_col}{PANEL_DIVIDER_LEFT}{border_line}{PANEL_DIVIDER_RIGHT}{b_rst}"
     side_char = f"{b_col}{PANEL_VERTICAL}{b_rst}"
 
     def card_line(txt: str = "") -> str:
-        pad = max(0, (width - 2) - visual_len(txt) - 2)
+        pad = max(0, (box_w - 2) - visual_len(txt) - 2)
         return f"{side_char} {txt}{' ' * pad} {side_char}"
 
-    print(pad_to_width(top_border, width, align="center"))
-    print(pad_to_width(card_line(f"{BOLD}{theme.fg_cyan}{'WELCOME TO FOSS CYBERSHELL'.center(inner_w)}{RESET}"), width, align="center"))
-    print(pad_to_width(div_border, width, align="center"))
-    print(pad_to_width(card_line(""), width, align="center"))
-    print(pad_to_width(card_line(f"{WHITE}{'A friendly, modern playground for mastering Linux commands.'.center(inner_w)}{RESET}"), width, align="center"))
-    print(pad_to_width(card_line(f"{theme.fg_muted}{'Safe hands-on sandbox • Real-time feedback • Zero damage'.center(inner_w)}{RESET}"), width, align="center"))
-    print(pad_to_width(card_line(""), width, align="center"))
-    print(pad_to_width(card_line(f"{BOLD}{theme.fg_yellow}{'Before we start, what is your name, explorer?'.center(inner_w)}{RESET}"), width, align="center"))
+    print(pad_to_width(top_border, term_w, align="center"))
+    print(pad_to_width(card_line(f"{BOLD}{theme.fg_cyan}{'WELCOME TO FOSS CYBERSHELL'.center(inner_w)}{RESET}"), term_w, align="center"))
+    print(pad_to_width(div_border, term_w, align="center"))
+    print(pad_to_width(card_line(""), term_w, align="center"))
+    print(pad_to_width(card_line(f"{WHITE}{'A friendly, modern playground for mastering Linux commands.'.center(inner_w)}{RESET}"), term_w, align="center"))
+    print(pad_to_width(card_line(f"{theme.fg_muted}{'Safe hands-on sandbox • Real-time feedback • Zero damage'.center(inner_w)}{RESET}"), term_w, align="center"))
+    print(pad_to_width(card_line(""), term_w, align="center"))
+    print(pad_to_width(card_line(f"{BOLD}{theme.fg_yellow}{'Before we start, what is your name, explorer?'.center(inner_w)}{RESET}"), term_w, align="center"))
     if current_name and current_name != "Explorer":
-        print(pad_to_width(card_line(f"{theme.fg_cyan}{f'Active Profile: {current_name}'.center(inner_w)}{RESET}"), width, align="center"))
-    print(pad_to_width(card_line(""), width, align="center"))
-    print(pad_to_width(bot_border, width, align="center"))
+        print(pad_to_width(card_line(f"{theme.fg_cyan}{f'Active Profile: {current_name}'.center(inner_w)}{RESET}"), term_w, align="center"))
+    print(pad_to_width(card_line(""), term_w, align="center"))
+    print(pad_to_width(bot_border, term_w, align="center"))
     print()
 
+    indent = " " * max(2, (term_w - box_w) // 2)
     if current_name and current_name != "Explorer":
-        sys.stdout.write(f"  {BOLD}{theme.fg_cyan}Enter your name (press [ENTER] for {current_name}, or type new name): {RESET}")
+        sys.stdout.write(f"{indent}{BOLD}{theme.fg_cyan}Enter your name (press [ENTER] for {current_name}, or type new name): {RESET}")
     else:
-        sys.stdout.write(f"  {BOLD}{theme.fg_cyan}Enter your name (default: Explorer): {RESET}")
+        sys.stdout.write(f"{indent}{BOLD}{theme.fg_cyan}Enter your name (default: Explorer): {RESET}")
     sys.stdout.flush()
 
     try:
@@ -747,10 +749,10 @@ def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer") ->
     sys.stdout.write("\033[H\033[J")
     tux_happy = get_foss_penguin(styled=True, frame="happy")
     for line in tux_happy.splitlines():
-        print(pad_to_width(line, width, align="center"))
+        print(pad_to_width(line, term_w, align="center"))
     print()
-    print(pad_to_width(f"{BOLD}{theme.fg_green}[✓] Welcome aboard, {clean_name}! Tux is excited to train with you.{RESET}", width, align="center"))
-    print(pad_to_width(f"{theme.fg_muted}Initializing your personal Linux sandbox...{RESET}", width, align="center"))
+    print(pad_to_width(f"{BOLD}{theme.fg_green}[✓] Welcome aboard, {clean_name}! Tux is excited to train with you.{RESET}", term_w, align="center"))
+    print(pad_to_width(f"{theme.fg_muted}Initializing your personal Linux sandbox...{RESET}", term_w, align="center"))
     if sys.stdout.isatty():
         time.sleep(0.4)
     return clean_name
@@ -763,19 +765,19 @@ def render_opening_screen(
     has_save: bool = False,
 ) -> str:
     """Render the primary adventure opening screen with clean web-app aesthetics."""
-    width = max(60, width)
-    inner_w = max(40, width - 4)
+    term_w = max(40, width)
+    card_w = max(44, min(term_w - 2, 78))
 
     # 1. FOSS Penguin Tux & Title Logo
     penguin_raw = get_foss_penguin(styled=True, frame="normal")
     penguin_lines = [
-        pad_to_width(line, width, align="center")
+        pad_to_width(line, term_w, align="center")
         for line in penguin_raw.splitlines()
     ]
 
     logo_raw = get_logo(styled=True)
     logo_lines = [
-        pad_to_width(line, width, align="center")
+        pad_to_width(line, term_w, align="center")
         for line in logo_raw.strip("\n").splitlines()
     ]
 
@@ -788,7 +790,7 @@ def render_opening_screen(
         f"{YELLOW}{player.xp} XP{RESET}  |  "
         f"{MAGENTA}Badges: {len(getattr(player, 'badges', []))}{RESET}"
     )
-    status_line_1 = pad_to_width(status_text_1, width, align="center")
+    status_line_1 = pad_to_width(status_text_1, term_w, align="center")
 
     # 3. System Highlights (Concise 3-line web-card overview instead of overwhelming 14-line box)
     from cybershell.ui.renderer import draw_panel
@@ -800,7 +802,7 @@ def render_opening_screen(
         f"  {GREEN}Command Center{RESET} (Ctrl+Space or ':cmd') • {MAGENTA}Chmod Decoder{RESET} ('chmod 755')",
         f"  {BLUE}Arcade Dojo{RESET} (Snake, Vim, Typing) • {CYAN}Tux Penguin Pet{RESET} • {YELLOW}18 Color Themes{RESET}",
     ]
-    func_panel_lines = draw_panel(func_title, func_content, inner_w, styled=True, border_color=fg_hex(HEX_BLUE))
+    func_panel_lines = draw_panel(func_title, func_content, card_w, styled=True, border_color=fg_hex(HEX_BLUE))
 
     # 4. Minimal Boxy Menu Layout
     menu_title = "MAIN DIRECTORY • CHOOSE A DESTINATION"
@@ -843,16 +845,16 @@ def render_opening_screen(
     menu_content.append(f"  {BOLD}{th.fg_yellow}Pro-tip:{RESET} {th.fg_white}Type any theme name directly (e.g. 'foss', 'sakura', 'mint', 'dracula') to switch instantly!{RESET}")
     menu_content.append("")
 
-    menu_panel_lines = draw_panel(menu_title, menu_content, inner_w, styled=True, border_color=fg_hex(HEX_PURPLE))
+    menu_panel_lines = draw_panel(menu_title, menu_content, card_w, styled=True, border_color=fg_hex(HEX_PURPLE))
 
     all_lines = (
         penguin_lines
         + [""]
         + logo_lines
         + ["", status_line_1, ""]
-        + [pad_to_width(line, width, align="center") for line in func_panel_lines]
+        + [pad_to_width(line, term_w, align="center") for line in func_panel_lines]
         + [""]
-        + [pad_to_width(line, width, align="center") for line in menu_panel_lines]
+        + [pad_to_width(line, term_w, align="center") for line in menu_panel_lines]
         + [""]
     )
     return "\n".join(all_lines)
@@ -1447,7 +1449,7 @@ def interactive_game_loop(
         mascot_content = pet.render(width=docs_inner_w + 2, height=6, styled=True)
 
         # 4. Render 4-Pane Opencode Layout with commandline inside the TERMINAL pane
-        layout_h = max(14, min(height - 4, 28))
+        layout_h = max(14, height - (4 if ambience.rain_enabled else 3))
         active_prompt = f"{BOLD}{theme.fg_green}{u_name}@cybershell{RESET}:{BOLD}{theme.fg_blue}{cwd_short}{RESET}$ "
         display_term_logs = list(terminal_logs) + [active_prompt]
 
@@ -2081,7 +2083,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                 )
             elif choice_lower in ("3", "map", "m"):
                 view_map(app.mainframe, player, all_quests, width)
-            elif choice_lower in ("4", "codex", "guide", "c", "find"):
+            elif choice_lower in ("4", "codex", "guide", "find"):
                 view_codex(app.codex, player, width)
             elif choice_lower in ("5", "items", "inventory", "backpack", "b"):
                 view_inventory(player, width)
@@ -2115,7 +2117,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                 )
             elif choice_lower in ("2", "map", "m"):
                 view_map(app.mainframe, player, all_quests, width)
-            elif choice_lower in ("3", "codex", "guide", "c", "find"):
+            elif choice_lower in ("3", "codex", "guide", "find"):
                 view_codex(app.codex, player, width)
             elif choice_lower in ("4", "items", "inventory", "backpack", "b"):
                 view_inventory(player, width)

@@ -398,14 +398,16 @@ class RPGApp:
             styled=True,
         )
 
-        content = [gradient_text("[ 🌱 LINUX COMMAND DIRECTORY // CODEX ]", HEX_PURPLE, HEX_CYAN), ""]
+        content = [gradient_text("[ LINUX COMMAND DIRECTORY // CODEX ]", HEX_PURPLE, HEX_CYAN), ""]
         for entry in self.codex.list_commands():
             content.append(f"  {entry['name']:<9} {entry['description']}")
         content.append("")
         content.append("Type 'man <command>' or 'lookup <command>' in the terminal for details!")
 
-        panel_lines = draw_panel(gradient_text("COMMAND GUIDE", HEX_PURPLE, HEX_CYAN), content, width - 4, styled=True, border_color=fg_hex(HEX_PURPLE))
-        return header + "\n\n" + "\n".join(panel_lines) + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
+        card_w = max(46, min(width - 4, 76))
+        panel_lines = draw_panel(gradient_text("COMMAND GUIDE", HEX_PURPLE, HEX_CYAN), content, card_w, styled=True, border_color=fg_hex(HEX_PURPLE))
+        centered_panel = "\n".join(pad_to_width(l, width, align="center") for l in panel_lines)
+        return header + "\n\n" + centered_panel + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
 
     def render_map(self, width: int = 80) -> str:
         """Render the Adventure Map screen."""
@@ -448,10 +450,10 @@ class RPGApp:
             styled=True,
         )
 
-        content = [gradient_text("[ 🎒 COLLECTED GOODIES & BADGES ]", HEX_YELLOW, HEX_GREEN), ""]
+        content = [gradient_text("[ COLLECTED ITEMS & BADGES ]", HEX_YELLOW, HEX_GREEN), ""]
         if not self.inventory:
             content.append("  Your backpack is currently empty.")
-            content.append("  Complete levels and discover secrets to collect goodies! 🌱")
+            content.append("  Complete levels and discover secrets to collect badges!")
         else:
             for item in self.inventory:
                 name = item.name if hasattr(item, 'name') else str(item)
@@ -464,8 +466,10 @@ class RPGApp:
         content.append("")
         content.append("Press Enter or Esc to return.")
 
-        panel_lines = draw_panel(gradient_text("BACKPACK", HEX_YELLOW, HEX_GREEN), content, width - 4, styled=True, border_color=fg_hex(HEX_YELLOW))
-        return header + "\n\n" + "\n".join(panel_lines) + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
+        card_w = max(46, min(width - 4, 76))
+        panel_lines = draw_panel(gradient_text("BACKPACK", HEX_YELLOW, HEX_GREEN), content, card_w, styled=True, border_color=fg_hex(HEX_YELLOW))
+        centered_panel = "\n".join(pad_to_width(l, width, align="center") for l in panel_lines)
+        return header + "\n\n" + centered_panel + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
 
     def render_manual(self, width: int = 80, page: int = 1, styled: bool = False) -> str:
         """Render the Field Manual & Rules screen."""
