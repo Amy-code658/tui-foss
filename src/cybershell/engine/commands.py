@@ -409,17 +409,13 @@ class ShellCommands:
             return self.man(args, stdin)
         commands = sorted(self._commands.keys())
         lines = [
-            "🌱 BYTE'S LINUX COMMAND GUIDE",
             "Available commands:",
             f"  {', '.join(commands[:11])}",
             f"  {', '.join(commands[11:])}",
             "",
-            "Helpful Tools:",
-            "  man <cmd>     - Short friendly guide for a command (e.g. 'man ls')",
-            "  ? / hint      - Friendly hints for your current objective",
-            "  map           - Show your adventure progress across all 15 levels",
-            "  clear         - Clear the screen",
-            "",
-            "Explore freely! Mistakes are completely okay and safe 🌱",
+            "  man <cmd>   - guide for a command (e.g. man ls)",
+            "  hint / ?    - hint for the current objective",
+            "  map         - progress across all levels",
+            "  clear       - clear the screen",
         ]
         return CommandResult(stdout="\n".join(lines) + "\n", exit_code=0)

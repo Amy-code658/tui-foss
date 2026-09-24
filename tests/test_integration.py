@@ -641,7 +641,7 @@ class TestCyberShellIntegration(unittest.TestCase):
         # help
         res_help = interpreter.execute("help")
         self.assertEqual(res_help.exit_code, 0)
-        self.assertIn("BYTE'S LINUX COMMAND GUIDE", res_help.stdout)
+        self.assertIn("Available commands:", res_help.stdout)
 
         # find
         self.vfs.mkdir_p("/home/operative/logs")

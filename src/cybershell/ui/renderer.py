@@ -492,11 +492,11 @@ def draw_control_footer(
 ) -> str:
     """Render a context-sensitive footer showing available controls."""
     if screen_type == "terminal":
-        text = "Ctrl+Space / :cmd Palette  |  :progress Dashboard  |  :games Arcade  |  :reset Reset  |  help"
+        text = ":cmd guide  |  hint  |  map  |  help"
     elif screen_type == "menu":
-        text = "↑↓ Select    ENTER Choose    ESC Back"
+        text = "Up/Down  Enter  ESC back"
     else:
-        text = "ENTER Continue    ESC Back"
+        text = "Enter continue  ESC back"
 
     if styled:
         return f"\033[2m{text}\033[0m"

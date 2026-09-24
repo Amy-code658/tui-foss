@@ -1297,24 +1297,26 @@ def interactive_game_loop(
     ScreenTransition.wipe_screen(delay=0.005)
     if player.current_sector == 0 and not quest.is_completed:
         terminal_logs: List[str] = [
-            f"{GREEN}[+] Initializing Level 1: Look Around...{RESET}",
-            f"{CYAN}Solve the challenge question above by typing the command or option letter!{RESET}",
-            f"{DIM}Tip: Type '?' for a hint, 'map' for level map.{RESET}",
+            f"{GREEN}[+] Level 1: Look Around — type a command or pick A/B/C/D{RESET}",
         ]
     else:
         lvl_display = player.current_sector + 1
         terminal_logs = [
-            f"{GREEN}[+] Entering Level {lvl_display}/15: {quest.sector_name}{RESET}",
-            f"{DIM}Type 'help' for commands, '?' for a hint, 'map' for level map.{RESET}",
+            f"{GREEN}[+] Level {lvl_display}/15: {quest.sector_name}{RESET}",
         ]
+
 
     hint_tier = 1
     last_objective_id: Optional[str] = None
     level_start_badges = list(getattr(player, "badges", []))
     docs_filter_term = ""
 
+    # Commands the engine can actually execute (used to filter the docs pane)
+    _executable_cmds: set = set(interpreter.commands.command_names) | {"tree", "clear"}
+
     while True:
         width, height = terminal_size()
+
         app.hp = player.hp
         app.max_hp = player.max_hp
         app.xp = player.xp
@@ -1325,7 +1327,7 @@ def interactive_game_loop(
         if active_obj:
             obj_desc = active_obj.description
         else:
-            obj_desc = "All level goals complete! Type 'next' or explore freely."
+            obj_desc = "All goals done. Type 'next' to continue."
 
         if active_obj and active_obj.id != last_objective_id:
             last_objective_id = active_obj.id
@@ -1399,20 +1401,23 @@ def interactive_game_loop(
         else:
             suggested = []
             task_content.append("")
-            task_content.append(f"{theme.fg_green}[+] Sector objectives complete! Type 'next' or explore freely.{RESET}")
+            task_content.append(f"{theme.fg_green}[+] All objectives done.{RESET}")
 
         # 2. Top-Right Pane: Local Docs (Context-Aware & Fuzzy Searchable)
         docs_content: List[str] = []
         if docs_filter_term:
-            filtered_cmds = fuzzy_search_commands(docs_filter_term, app.codex.list_commands(), limit=16)
-            docs_content.append(f"{theme.fg_yellow}Search: '{docs_filter_term}' ({len(filtered_cmds)} matches){RESET}")
+            all_matches = fuzzy_search_commands(docs_filter_term, app.codex.list_commands(), limit=16)
+            filtered_cmds = [c for c in all_matches if c.get("name", "") in _executable_cmds]
+            docs_content.append(f"{theme.fg_yellow}'{docs_filter_term}' ({len(filtered_cmds)}){RESET}")
         else:
             quest_cmds = suggested if active_obj else []
-            filtered_cmds = app.codex.get_contextual_commands(
+            all_cmds = app.codex.get_contextual_commands(
                 relevant_cmds=quest_cmds,
-                limit=16,
+                limit=20,
             )
-            docs_content.append(f"{DIM}Commands Codex (:cmd / 'search'){RESET}")
+            # Only show commands the engine can actually execute
+            filtered_cmds = [c for c in all_cmds if c.get("name", "") in _executable_cmds]
+            docs_content.append(f"{DIM}Commands{RESET}")
 
         for cmd in filtered_cmds[:14]:
             name = cmd.get("name", "")
@@ -1422,8 +1427,8 @@ def interactive_game_loop(
             docs_content.append(f"{theme.fg_cyan}{name:<7}{RESET} {DIM}{desc_part}{RESET}")
 
         if not filtered_cmds:
-            docs_content.append(f"{theme.fg_red}No matching commands.{RESET}")
-            docs_content.append(f"{DIM}Type 'search' to reset.{RESET}")
+            docs_content.append(f"{theme.fg_red}No matches.{RESET}")
+
 
         # 3. Bottom-Right Pane: Terminal Pet (Byte)
         pet = get_terminal_pet()
@@ -1628,14 +1633,14 @@ def interactive_game_loop(
             else:
                 docs_filter_term = query
                 results = fuzzy_search_commands(query, app.codex.list_commands(), limit=6)
-                terminal_logs.append(f"{CYAN}[+] Filtered local docs for '{query}' ({len(results)} matches).{RESET}")
+                terminal_logs.append(f"{CYAN}Docs: '{query}' ({len(results)} matches){RESET}")
                 for t_line in render_telescope_results(query, results, width=min(task_inner_w + 2, 65), styled=True):
                     terminal_logs.append(t_line)
             continue
         elif input_lower == "search":
             terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             docs_filter_term = ""
-            terminal_logs.append(f"{CYAN}[+] Local docs search filter reset. Showing all commands.{RESET}")
+            terminal_logs.append(f"{CYAN}[+] Local docs search filter cleared.{RESET}")
             continue
 
         if input_lower == "save":
@@ -1723,7 +1728,6 @@ def interactive_game_loop(
                 if res.stderr:
                     for err_line in res.stderr.splitlines():
                         terminal_logs.append(f"{RED}{err_line}{RESET}")
-                terminal_logs.append(f"{DIM}[TIP] Output shown above. Review mission briefing to find the required command.{RESET}")
             continue
         else:
             actual_cmd = user_input
@@ -1755,14 +1759,7 @@ def interactive_game_loop(
             pet.react_error(result.stderr)
             for err_line in result.stderr.splitlines():
                 terminal_logs.append(f"{RED}{err_line}{RESET}")
-            feedback_errs = [
-                "✗ Not quite. Check the path and try again.",
-                "✗ Command failed. Double-check your syntax.",
-                "✗ Target not found. Check files with 'ls -la'.",
-            ]
-            terminal_logs.append(f"{YELLOW}{random.choice(feedback_errs)}{RESET}")
-            if not typo:
-                terminal_logs.append(f"{DIM}Type 'hint' or 'search <cmd>' for tactical guidance.{RESET}")
+
 
         # Objective evaluation
         old_level = player.level
