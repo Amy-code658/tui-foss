@@ -264,55 +264,62 @@ def get_siren_banner(text: str = "", width: int = 76, styled: bool = False) -> s
 # =============================================================================
 
 FOSS_PENGUIN: str = """\
-         _~_
-        (o o)
-       /  V  \\
-      /(  _  )\\
-        ^^ ^^"""
+       _~_
+      (o o)
+     /  V  \\
+    /(  _  )\\
+      ^^ ^^"""
 
 
 def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
     """Return the FOSS penguin ASCII art.
 
-    Simple cute penguin: dome _~_ head, round (o o) eyes, V beak,
-    belly body, and little ^^ ^^ feet.  Supports four animation frames.
+    Exact match to user reference:
+         _~_
+        (o o)
+       /  V  \\
+      /(  _  )\\
+        ^^ ^^
+
+    Supports four animation frames: normal, blink, happy, wave.
 
     Args:
         styled: If True, apply theme ANSI colors.
         frame: Animation state ('normal', 'blink', 'wave', 'happy').
     """
+    # Each raw line is exactly 13 chars (widest body line) so centering is consistent
     if not styled:
         if frame == "wave":
             lines_raw = [
-                r"         _~_    /   ",
-                r"        (o o)  //   ",
-                r"       /  V  |/     ",
-                r"      /(  _  )\     ",
-                r"        ^^ ^^       ",
+                r"       _~_   /",
+                r"      (o o) //",
+                r"     /  V  |/ ",
+                r"    /(  _  )\ ",
+                r"      ^^ ^^   ",
             ]
         elif frame == "happy":
             lines_raw = [
-                r"         _~_        ",
-                r"        (^ ^)       ",
-                r"       /  V  \      ",
-                r"      /(  _  )\     ",
-                r"        ^^ ^^       ",
+                r"       _~_    ",
+                r"      (^ ^)   ",
+                r"     /  V  \  ",
+                r"    /(  _  )\ ",
+                r"      ^^ ^^   ",
             ]
         elif frame == "blink":
             lines_raw = [
-                r"         _~_        ",
-                r"        (- -)       ",
-                r"       /  V  \      ",
-                r"      /(  _  )\     ",
-                r"        ^^ ^^       ",
+                r"       _~_    ",
+                r"      (- -)   ",
+                r"     /  V  \  ",
+                r"    /(  _  )\ ",
+                r"      ^^ ^^   ",
             ]
         else:
             lines_raw = [
-                r"         _~_        ",
-                r"        (o o)       ",
-                r"       /  V  \      ",
-                r"      /(  _  )\     ",
-                r"        ^^ ^^       ",
+                r"       _~_    ",
+                r"      (o o)   ",
+                r"     /  V  \  ",
+                r"    /(  _  )\ ",
+                r"      ^^ ^^   ",
             ]
         return "\n".join(lines_raw)
 
@@ -339,18 +346,19 @@ def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
 
     if frame == "wave":
         lines = [
-            f"         {c_blue}_~_    /{rst}   ",
-            f"        {eye_str}  {c_blue}//{rst}   ",
-            f"       {c_blue}/  {bld}{c_yellow}V{rst}{c_blue}  |/{rst}     ",
-            f"      {c_blue}/(  {bld}{c_yellow}_{rst}{c_blue}  )\\{rst}     ",
-            f"        {bld}{c_yellow}^^ ^^{rst}       ",
+            f"       {c_blue}_~_   /{rst}",
+            f"      {eye_str} {c_blue}//{rst}",
+            f"     {c_blue}/  {bld}{c_yellow}V{rst}{c_blue}  |/{rst} ",
+            f"    {c_blue}/(  {bld}{c_yellow}_{rst}{c_blue}  )\\{rst} ",
+            f"      {bld}{c_yellow}^^ ^^{rst}   ",
         ]
     else:
         lines = [
-            f"         {c_blue}_~_{rst}        ",
-            f"        {eye_str}       ",
-            f"       {c_blue}/  {bld}{c_yellow}V{rst}{c_blue}  \\{rst}      ",
-            f"      {c_blue}/(  {bld}{c_yellow}_{rst}{c_blue}  )\\{rst}     ",
-            f"        {bld}{c_yellow}^^ ^^{rst}       ",
+            f"       {c_blue}_~_{rst}    ",
+            f"      {eye_str}   ",
+            f"     {c_blue}/  {bld}{c_yellow}V{rst}{c_blue}  \\{rst}  ",
+            f"    {c_blue}/(  {bld}{c_yellow}_{rst}{c_blue}  )\\{rst} ",
+            f"      {bld}{c_yellow}^^ ^^{rst}   ",
         ]
     return "\n".join(lines)
+
