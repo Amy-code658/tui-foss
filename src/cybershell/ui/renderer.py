@@ -649,25 +649,25 @@ def draw_opencode_layout(
     styled: bool = True
 ) -> str:
     """Render a 4-pane Opencode style layout exactly matching terminal height."""
-    left_width = int(width * 0.70)
-    right_width = width - left_width - gap
+    usable_width = max(40, width - 1) if width > 40 else width
+    left_width = int(usable_width * 0.65)
+    right_width = usable_width - left_width - gap
     
-    needed_task_height = len(task_content) + 3 # +3 for borders and title padding
-    max_task_height = max(5, height - 8) # Leave at least 8 lines for the terminal
+    needed_task_height = len(task_content) + 3  # +3 for borders and title padding
+    max_task_height = max(5, height - 8)        # Leave at least 8 lines for the terminal
     task_height = max(5, min(needed_task_height, max_task_height))
     term_height = height - task_height
     
-    mascot_height = min(max(8, len(mascot_content) + 2), int(height * 0.40))
+    mascot_height = min(max(7, len(mascot_content) + 2), max(6, int(height * 0.40)))
     docs_height = height - mascot_height
     
     term_max_content = term_height - 3
     sliced_term = term_content[-term_max_content:] if len(term_content) > term_max_content else term_content
     
-    # We use hardcoded ANSI colors for borders here for simplicity, but could use fg_hex
-    task_panel = draw_fixed_panel(task_title, task_content, left_width, task_height, styled=styled, border_color="\033[38;2;187;154;247m") # HEX_PURPLE
-    term_panel = draw_fixed_panel(term_title, sliced_term, left_width, term_height, styled=styled, border_color="\033[38;2;122;162;247m") # HEX_BLUE
-    docs_panel = draw_fixed_panel(docs_title, docs_content, right_width, docs_height, styled=styled, border_color="\033[38;2;125;207;200m") # HEX_CYAN
-    mascot_panel = draw_fixed_panel("BYTE", mascot_content, right_width, mascot_height, styled=styled, border_color="\033[38;2;224;175;104m") # HEX_YELLOW
+    task_panel = draw_fixed_panel(task_title, task_content, left_width, task_height, styled=styled, border_color="\033[38;2;187;154;247m")  # HEX_PURPLE
+    term_panel = draw_fixed_panel(term_title, sliced_term, left_width, term_height, styled=styled, border_color="\033[38;2;122;162;247m")  # HEX_BLUE
+    docs_panel = draw_fixed_panel(docs_title, docs_content, right_width, docs_height, styled=styled, border_color="\033[38;2;125;207;200m")  # HEX_CYAN
+    mascot_panel = draw_fixed_panel("BYTE", mascot_content, right_width, mascot_height, styled=styled, border_color="\033[38;2;224;175;104m")  # HEX_YELLOW
     
     left_col = task_panel + term_panel
     right_col = docs_panel + mascot_panel

@@ -100,7 +100,7 @@ from cybershell.ui.renderer import (
 from cybershell.ui.search import fuzzy_search_commands, render_telescope_results
 from cybershell.ui.rpg_app import RPGApp
 from cybershell.ui.animation import CelebrationEffect, ScreenTransition, Typewriter
-from cybershell.ui.theme import gradient_text, pill, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_BG_DARK, HEX_BLUE, FG_BORDER, RESET, BOLD
+from cybershell.ui.theme import gradient_text, pill, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_BG_DARK, HEX_BLUE, FG_BORDER, RESET, BOLD, FG_WHITE, FG_MUTED
 
 
 def wrap_text(text: str, width: int, prefix: str = "", style: str = "") -> List[str]:
@@ -1118,64 +1118,94 @@ def interactive_game_loop(
         cwd_path = vfs.get_cwd_path()
         cwd_short = cwd_path.replace(f"/home/{vfs.user}", "~")
 
-        # 1. Top statusline (Lualine style)
-        statusline = draw_statusline(
-            mode="WARGAME",
-            breadcrumb=f"~ › sector-{quest.sector_id + 1:02d} › {quest.sector_name.lower().replace(' ', '-')}",
-            objective=active_obj.description[:26] if active_obj else "Sector Complete",
-            xp=player.xp,
-            level=player.level,
-            width=width,
-            styled=True,
-        )
+        # Usable dimensions for 4-pane layout
+        usable_w = max(40, width - 1) if width > 40 else width
+        left_w = int(usable_w * 0.65)
+        right_w = usable_w - left_w - 1
+        task_inner_w = max(10, left_w - 4)
+        docs_inner_w = max(10, right_w - 4)
 
-        # 2. OverTheWire Mission Card (No ABCD quiz spoon-feeding)
+        # 1. Top-Left Pane: OverTheWire Mission Task (No ABCD quiz)
+        task_content: List[str] = []
+        task_content.append(f"{YELLOW}Level {player.current_sector + 1}/15: {quest.sector_name.upper()}{RESET}")
         if active_obj:
+            task_content.append("")
+            # Target
+            target_str = f"TARGET   : {active_obj.description}"
+            for i, line in enumerate(textwrap.wrap(target_str, width=task_inner_w)):
+                task_content.append(f"{BOLD}{WHITE}{line}{RESET}" if i == 0 else f"           {WHITE}{line}{RESET}")
+
+            # Scenario
+            scenario_text = getattr(active_obj, "scenario", "") or getattr(quest, "lore", "")[:70]
+            if scenario_text:
+                for i, line in enumerate(textwrap.wrap(f"SCENARIO : {scenario_text}", width=task_inner_w)):
+                    task_content.append(f"{CYAN}{line}{RESET}" if i == 0 else f"           {CYAN}{line}{RESET}")
+
+            # Suggested Commands
             suggested = []
             if getattr(active_obj, "command", None):
                 for c in active_obj.command.replace("|", ",").split(","):
                     c_clean = c.strip()
                     if c_clean and c_clean not in suggested:
                         suggested.append(c_clean)
+            if getattr(active_obj, "options", None):
+                for opt in active_obj.options:
+                    c_opt = opt.split(" - ")[0].strip().split()[0]
+                    if c_opt not in suggested:
+                        suggested.append(c_opt)
             for c in ["pwd", "ls", "cd", "cat", "man"]:
                 if c not in suggested and len(suggested) < 4:
                     suggested.append(c)
+            cmd_str = ", ".join(suggested[:4])
+            task_content.append(f"{GREEN}COMMANDS : {cmd_str}{RESET}")
 
-            mission_card = draw_overthewire_card(
-                sector_id=quest.sector_id,
-                sector_name=quest.sector_name,
-                target_text=active_obj.description,
-                scenario=getattr(active_obj, "scenario", "") or quest.lore[:70],
-                suggested_commands=suggested,
-                current_hint="",
-                width=width,
-                styled=True,
-            )
+            # Tactical Intel
+            intel_str = "Type 'hint' for tactical clues | 'search <cmd>' for docs"
+            task_content.append(f"{DIM}INTEL    : {intel_str}{RESET}")
         else:
-            mission_card = draw_overthewire_card(
-                sector_id=quest.sector_id,
-                sector_name=quest.sector_name,
-                target_text="All sector objectives cleared!",
-                scenario="All objectives met. Proceed to next sector or explore freely.",
-                suggested_commands=["next", "status", "map", "menu"],
-                current_hint="",
-                width=width,
-                styled=True,
-            )
+            task_content.append("")
+            task_content.append(f"{GREEN}[+] Sector objectives complete! Type 'next' or explore freely.{RESET}")
 
-        card_lines = mission_card.splitlines()
+        # 2. Top-Right Pane: Local Docs (Fuzzy Searchable)
+        docs_content: List[str] = []
+        if docs_filter_term:
+            filtered_cmds = fuzzy_search_commands(docs_filter_term, app.codex.list_commands(), limit=12)
+            docs_content.append(f"{YELLOW}Search: '{docs_filter_term}' ({len(filtered_cmds)} matches){RESET}")
+        else:
+            filtered_cmds = app.codex.list_commands()
+            docs_content.append(f"{DIM}Commands Codex (Type 'search <cmd>'){RESET}")
+
+        for cmd in filtered_cmds[:10]:
+            name = cmd.get("name", "")
+            desc = cmd.get("description", "")
+            avail_desc = max(8, docs_inner_w - 8)
+            desc_part = desc[:avail_desc] if len(desc) > avail_desc else desc
+            docs_content.append(f"{CYAN}{name:<7}{RESET} {DIM}{desc_part}{RESET}")
+
+        if not filtered_cmds:
+            docs_content.append(f"{RED}No matching commands.{RESET}")
+            docs_content.append(f"{DIM}Type 'search' to reset.{RESET}")
+
+        # 3. Bottom-Right Pane: Mascot (Byte)
+        mascot_content = get_portrait(player.character_name, styled=True)
+        quotes = ["You got this!", "Keep exploring!", "Every error is a lesson!", "Think like a hacker!"]
+        mascot_content.append("")
+        mascot_content.append(f"{GREEN}{quotes[player.xp % len(quotes)]}{RESET}".center(docs_inner_w + 2))
+
+        # 4. Render 4-Pane Opencode Layout
+        layout_h = max(16, height - 3)
+        layout = draw_opencode_layout(
+            task_title="YOUR TASK", task_content=task_content,
+            term_title="TERMINAL", term_content=terminal_logs,
+            docs_title="LOCAL DOCS", docs_content=docs_content,
+            mascot_content=mascot_content,
+            width=width, height=layout_h, gap=1, styled=True
+        )
+
         footer = draw_control_footer(screen_type="terminal", width=width, styled=True)
 
-        overhead = 1 + len(card_lines) + 2  # statusline + card + footer + prompt
-        available_lines = max(5, height - overhead)
-        display_logs = terminal_logs[-available_lines:] if len(terminal_logs) > available_lines else terminal_logs
-
-        # Draw clean screen with output directly under commandline
         sys.stdout.write("\033[H\033[J")
-        sys.stdout.write(statusline + "\n")
-        sys.stdout.write(mission_card + "\n")
-        for line in display_logs:
-            sys.stdout.write(line + "\n")
+        sys.stdout.write(layout + "\n")
         sys.stdout.write(pad_to_width(footer, width, align="center") + "\n")
         sys.stdout.flush()
 
@@ -1225,15 +1255,20 @@ def interactive_game_loop(
         if input_lower.startswith("search "):
             query = input_lower[7:].strip()
             terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
-            results = fuzzy_search_commands(query, app.codex.list_commands(), limit=6)
-            for t_line in render_telescope_results(query, results, width=min(width - 2, 78), styled=True):
-                terminal_logs.append(t_line)
+            if query in ("*", "all", "clear", "reset"):
+                docs_filter_term = ""
+                terminal_logs.append(f"{CYAN}[+] Local docs search filter cleared.{RESET}")
+            else:
+                docs_filter_term = query
+                results = fuzzy_search_commands(query, app.codex.list_commands(), limit=6)
+                terminal_logs.append(f"{CYAN}[+] Filtered local docs for '{query}' ({len(results)} matches).{RESET}")
+                for t_line in render_telescope_results(query, results, width=min(task_inner_w + 2, 65), styled=True):
+                    terminal_logs.append(t_line)
             continue
         elif input_lower == "search":
             terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
-            results = app.codex.list_commands()[:6]
-            for t_line in render_telescope_results("", results, width=min(width - 2, 78), styled=True):
-                terminal_logs.append(t_line)
+            docs_filter_term = ""
+            terminal_logs.append(f"{CYAN}[+] Local docs search filter reset. Showing all commands.{RESET}")
             continue
 
         if input_lower == "save":
@@ -1297,7 +1332,6 @@ def interactive_game_loop(
         # Check for option selection [A/B/C/D] or [1/2/3/4]
         opt_cmd, opt_msg = resolve_option_choice(user_input, active_obj)
         if opt_cmd is not None:
-            terminal_logs.append(f"{GREEN}{opt_msg}{RESET}")
             actual_cmd = opt_cmd
         elif opt_msg is not None:
             terminal_logs.append(f"{YELLOW}{opt_msg}{RESET}")
@@ -1331,6 +1365,8 @@ def interactive_game_loop(
 
         # Execute command in VFS
         terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {actual_cmd}{RESET}")
+        if opt_cmd is not None and opt_msg:
+            terminal_logs.append(f"{CYAN}{opt_msg}{RESET}")
         result = interpreter.execute(actual_cmd)
 
         if typo:
