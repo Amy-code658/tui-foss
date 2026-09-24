@@ -129,6 +129,11 @@ class TerminalPet:
         self.streak_count: int = 0
         self.commands_observed: int = 0
         self.success_count: int = 0
+        self.player_name: str = ""
+
+    def set_player_name(self, name: str) -> None:
+        """Set the player's name for personalized reactions."""
+        self.player_name = name.strip()
 
     def toggle(self) -> bool:
         """Toggle pet on or off. Returns new state."""
@@ -228,7 +233,7 @@ class TerminalPet:
 
         # Mood / Quote line
         prefix = f"{self.name}: "
-        quote_text = self.current_quote
+        quote_text = self.current_quote.replace("{name}", self.player_name or "Explorer")
         max_quote_len = max(4, inner_w - len(prefix) - 2)
         if len(quote_text) > max_quote_len:
             quote_text = quote_text[:max_quote_len - 3] + "..."

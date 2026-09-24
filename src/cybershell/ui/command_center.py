@@ -208,7 +208,7 @@ def run_theme_selector(width: int = 70) -> None:
         sep_line = "=" * 64
         sub_sep = "-" * 64
         print("\n" + f"{current.fg_blue}{sep_line}{RESET}")
-        print(f"  {BOLD}{current.fg_cyan}THEME SELECTOR // 17 DEVELOPER & PASTEL COLOR THEMES{RESET}")
+        print(f"  {BOLD}{current.fg_cyan}THEME SELECTOR // 18 DEVELOPER & MINIMAL COLOR THEMES{RESET}")
         print(f"{current.fg_blue}{sep_line}{RESET}")
         print(f"  Active: {BOLD}{current.fg_purple}{current.display_name}{RESET}  (preview live swatches below)\n")
 

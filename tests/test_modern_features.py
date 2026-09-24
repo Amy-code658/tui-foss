@@ -41,9 +41,9 @@ from cybershell.ui.command_center import render_command_center, PALETTE_ACTIONS
 class TestThemes(unittest.TestCase):
     """Verify 17 developer and pastel color themes and switching mechanism."""
 
-    def test_seventeen_themes_registered(self) -> None:
+    def test_eighteen_themes_registered(self) -> None:
         themes = list_themes()
-        self.assertEqual(len(themes), 17)
+        self.assertEqual(len(themes), 18)
         theme_ids = {t.id for t in themes}
         required_ids = {
             "tokyo-night",
@@ -63,10 +63,11 @@ class TestThemes(unittest.TestCase):
             "pastel-sakura",
             "pastel-mint",
             "pastel-peach",
+            "web-minimal",
         }
         self.assertTrue(required_ids.issubset(theme_ids))
 
-    def test_pastel_theme_aliases(self) -> None:
+    def test_pastel_and_minimal_theme_aliases(self) -> None:
         self.assertTrue(set_theme("sakura"))
         self.assertEqual(get_active_theme().id, "pastel-sakura")
         self.assertTrue(set_theme("pastel-mint"))
@@ -75,6 +76,10 @@ class TestThemes(unittest.TestCase):
         self.assertEqual(get_active_theme().id, "pastel-peach")
         self.assertTrue(set_theme("lavender"))
         self.assertEqual(get_active_theme().id, "pastel-lavender")
+        self.assertTrue(set_theme("web"))
+        self.assertEqual(get_active_theme().id, "web-minimal")
+        self.assertTrue(set_theme("minimal"))
+        self.assertEqual(get_active_theme().id, "web-minimal")
 
     def test_theme_switching(self) -> None:
         success = set_theme("dracula")
@@ -176,6 +181,14 @@ class TestTerminalPet(unittest.TestCase):
         self.assertIn("121;192;255", joined)
         self.assertIn("241;224;90", joined)
         self.assertIn(">v<", joined)
+
+    def test_pet_personalized_name(self) -> None:
+        self.pet.set_player_name("Amy")
+        self.assertEqual(self.pet.player_name, "Amy")
+        self.pet.current_quote = "Great job, {name}!"
+        rendered = self.pet.render(width=30, height=6, styled=False)
+        joined = "".join(rendered)
+        self.assertIn("Amy", joined)
 
 
 class TestAmbienceManager(unittest.TestCase):
@@ -359,6 +372,35 @@ class TestLayoutDynamicThemingAndRain(unittest.TestCase):
         penguin = get_foss_penguin(styled=False)
         self.assertTrue(len(penguin.splitlines()) >= 5)
         self.assertIn("() ()", penguin)
+
+    def test_foss_penguin_frames_and_welcome(self) -> None:
+        from cybershell.ui.ascii_art import get_foss_penguin
+        from cybershell.ui.animation import animate_tux_welcome
+        from cybershell.run import prompt_player_onboarding
+        
+        # Test frames
+        p_normal = get_foss_penguin(styled=False, frame="normal")
+        p_blink = get_foss_penguin(styled=False, frame="blink")
+        p_wave = get_foss_penguin(styled=False, frame="wave")
+        p_happy = get_foss_penguin(styled=False, frame="happy")
+        
+        self.assertIn("() ()", p_normal)
+        self.assertIn("-- --", p_blink)
+        self.assertIn("\\.---./", p_wave)
+        self.assertIn("^^ ^^", p_happy)
+        
+        # Non-interactive executions (must not raise or block)
+        from unittest.mock import patch
+        with patch("sys.stdout.isatty", return_value=False):
+            animate_tux_welcome(character_name="TestHero", width=80, quick=True)
+
+        with patch("builtins.input", return_value="Amy"):
+            name = prompt_player_onboarding(width=80)
+            self.assertEqual(name, "Amy")
+
+        with patch("builtins.input", return_value=""):
+            default_name = prompt_player_onboarding(width=80)
+            self.assertEqual(default_name, "Explorer")
 
     def test_thick_heavy_borders(self) -> None:
         from cybershell.ui.renderer import draw_fixed_panel, HEAVY_TOP_LEFT, HEAVY_BOTTOM_LEFT

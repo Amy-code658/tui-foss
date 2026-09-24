@@ -102,7 +102,7 @@ from cybershell.ui.renderer import (
 )
 from cybershell.ui.search import fuzzy_search_commands, render_telescope_results
 from cybershell.ui.rpg_app import RPGApp
-from cybershell.ui.animation import CelebrationEffect, ScreenTransition, Typewriter
+from cybershell.ui.animation import CelebrationEffect, ScreenTransition, Typewriter, animate_tux_welcome
 from cybershell.ui.theme import (
     get_active_theme,
     set_theme,
@@ -571,8 +571,72 @@ def explain_command(
 
 
 # =============================================================================
-# DEDICATED OPENING SCREEN & NAVIGATION
+# PERSONALIZED ONBOARDING & OPENING HERO SCREEN
 # =============================================================================
+
+def prompt_player_onboarding(width: int = 80) -> str:
+    """Personalized onboarding card asking user's name with clean web-app aesthetics."""
+    if not sys.stdin.isatty():
+        return "Explorer"
+
+    width = max(50, min(width, 76))
+    inner_w = width - 4
+    theme = get_active_theme()
+
+    sys.stdout.write("\033[H\033[J")
+    tux_raw = get_foss_penguin(styled=True, frame="wave")
+    for line in tux_raw.splitlines():
+        print(pad_to_width(line, width, align="center"))
+    print()
+
+    b_col = theme.fg_blue
+    b_rst = RESET
+    border_line = PANEL_HORIZONTAL * (width - 2)
+    top_border = f"{b_col}{PANEL_TOP_LEFT}{border_line}{PANEL_TOP_RIGHT}{b_rst}"
+    bot_border = f"{b_col}{PANEL_BOTTOM_LEFT}{border_line}{PANEL_BOTTOM_RIGHT}{b_rst}"
+    div_border = f"{b_col}{PANEL_DIVIDER_LEFT}{border_line}{PANEL_DIVIDER_RIGHT}{b_rst}"
+    side_char = f"{b_col}{PANEL_VERTICAL}{b_rst}"
+
+    def card_line(txt: str = "") -> str:
+        pad = max(0, (width - 2) - visual_len(txt) - 2)
+        return f"{side_char} {txt}{' ' * pad} {side_char}"
+
+    print(pad_to_width(top_border, width, align="center"))
+    print(pad_to_width(card_line(f"{BOLD}{theme.fg_cyan}{'WELCOME TO FOSS CYBERSHELL'.center(inner_w)}{RESET}"), width, align="center"))
+    print(pad_to_width(div_border, width, align="center"))
+    print(pad_to_width(card_line(""), width, align="center"))
+    print(pad_to_width(card_line(f"{WHITE}{'A friendly, modern playground for mastering Linux commands.'.center(inner_w)}{RESET}"), width, align="center"))
+    print(pad_to_width(card_line(f"{theme.fg_muted}{'Safe hands-on sandbox • Real-time feedback • Zero damage'.center(inner_w)}{RESET}"), width, align="center"))
+    print(pad_to_width(card_line(""), width, align="center"))
+    print(pad_to_width(card_line(f"{BOLD}{theme.fg_yellow}{'Before we start, what is your name, explorer?'.center(inner_w)}{RESET}"), width, align="center"))
+    print(pad_to_width(card_line(""), width, align="center"))
+    print(pad_to_width(bot_border, width, align="center"))
+    print()
+
+    sys.stdout.write(f"  {BOLD}{theme.fg_cyan}Enter your name (default: Explorer): {RESET}")
+    sys.stdout.flush()
+
+    try:
+        raw_name = input().strip()
+    except (KeyboardInterrupt, EOFError):
+        return "Explorer"
+
+    clean_name = "".join(c for c in raw_name if c.isalnum() or c in ("-", "_", " ")).strip()
+    if not clean_name:
+        clean_name = "Explorer"
+    clean_name = clean_name[:16]
+
+    sys.stdout.write("\033[H\033[J")
+    tux_happy = get_foss_penguin(styled=True, frame="happy")
+    for line in tux_happy.splitlines():
+        print(pad_to_width(line, width, align="center"))
+    print()
+    print(pad_to_width(f"{BOLD}{theme.fg_green}[✓] Welcome aboard, {clean_name}! Tux is excited to train with you.{RESET}", width, align="center"))
+    print(pad_to_width(f"{theme.fg_muted}Initializing your personal Linux sandbox...{RESET}", width, align="center"))
+    if sys.stdout.isatty():
+        time.sleep(0.5)
+    return clean_name
+
 
 def render_opening_screen(
     player: PlayerStats,
@@ -580,12 +644,12 @@ def render_opening_screen(
     cadet_mode: bool = True,
     has_save: bool = False,
 ) -> str:
-    """Render the primary adventure opening screen."""
+    """Render the primary adventure opening screen with clean web-app aesthetics."""
     width = max(60, width)
     inner_w = max(40, width - 4)
 
     # 1. FOSS Penguin Tux & Title Logo
-    penguin_raw = get_foss_penguin(styled=True)
+    penguin_raw = get_foss_penguin(styled=True, frame="normal")
     penguin_lines = [
         pad_to_width(line, width, align="center")
         for line in penguin_raw.splitlines()
@@ -608,25 +672,15 @@ def render_opening_screen(
     )
     status_line_1 = pad_to_width(status_text_1, width, align="center")
 
-    # 3. System Functions & Capabilities Overview
+    # 3. System Highlights (Concise 3-line web-card overview instead of overwhelming 14-line box)
     from cybershell.ui.renderer import draw_panel
     from cybershell.ui.theme import fg_hex
 
-    func_title = "FOSS LINUX CYBERSHELL // SYSTEM FUNCTIONS & CAPABILITIES"
+    func_title = "FOSS CYBERSHELL // SYSTEM HIGHLIGHTS"
     func_content = [
-        "",
-        f"  {BOLD}{CYAN}:: Command Center  {RESET}: {WHITE}Ctrl+Space or ':cmd' for quick commands, themes & toggles{RESET}",
-        f"  {BOLD}{CYAN}:: Field Manual    {RESET}: {WHITE}'man <cmd>' for syntax, purpose, examples & combos{RESET}",
-        f"  {BOLD}{CYAN}:: Linux Missions  {RESET}: {WHITE}15 OverTheWire-style challenges with live virtual FS{RESET}",
-        f"  {BOLD}{CYAN}:: Local Docs      {RESET}: {WHITE}Fuzzy command search in real-time ('search <query>'){RESET}",
-        f"  {BOLD}{CYAN}:: Chmod Decoder   {RESET}: {WHITE}Octal & symbolic permission analysis ('chmod 755' / ':chmod'){RESET}",
-        f"  {BOLD}{CYAN}:: Cybershell Dojo {RESET}: {WHITE}Terminal Snake, Vim Dojo & Typing speed drills (':games'){RESET}",
-        f"  {BOLD}{CYAN}:: Terminal Pet    {RESET}: {WHITE}Companion Byte with real-time ASCII reactions ('pet'){RESET}",
-        f"  {BOLD}{CYAN}:: Ambient Rain    {RESET}: {WHITE}Physics-based falling rain with light shading ('rain'){RESET}",
-        f"  {BOLD}{CYAN}:: Calm Animations {RESET}: {WHITE}Subtle non-intrusive status indicators ('anim'){RESET}",
-        f"  {BOLD}{CYAN}:: Progress Stats  {RESET}: {WHITE}Skill dashboard, completion & category mastery (':progress'){RESET}",
-        f"  {BOLD}{CYAN}:: 17 Color Themes {RESET}: {WHITE}FOSS, Pastel Lavender, Pastel Sakura, Dracula, Nord & more (':theme'){RESET}",
-        "",
+        f"  {CYAN}Shell Missions{RESET} (15 OverTheWire-style challenges) • {YELLOW}Fuzzy Docs{RESET} ('search <query>')",
+        f"  {GREEN}Command Center{RESET} (Ctrl+Space or ':cmd') • {MAGENTA}Chmod Decoder{RESET} ('chmod 755')",
+        f"  {BLUE}Arcade Dojo{RESET} (Snake, Vim, Typing) • {CYAN}Tux Penguin Pet{RESET} • {YELLOW}18 Color Themes{RESET}",
     ]
     func_panel_lines = draw_panel(func_title, func_content, inner_w, styled=True, border_color=fg_hex(HEX_BLUE))
 
@@ -871,7 +925,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
         print()
 
         # Permissions Learning Reference Card (compact 3 lines)
-        print(f"  {YELLOW}{BOLD}[ 📖 PERMISSIONS FORMULA ]{RESET}")
+        print(f"  {YELLOW}{BOLD}[ PERMISSIONS FORMULA ]{RESET}")
         print(f"  {WHITE}Triads : {GREEN}[User/Owner]{WHITE} {CYAN}[Group]{WHITE} {MAGENTA}[Others]{RESET}")
         print(f"  {WHITE}Values : {BOLD}r (read) = 4{RESET}  |  {BOLD}w (write) = 2{RESET}  |  {BOLD}x (execute) = 1{RESET}  |  {DIM}- = 0{RESET}")
         print(f"  {DIM}Example: rwxr-xr-x -> User: 4+2+1=7 | Group: 4+0+1=5 | Others: 4+0+1=5  =>  755{RESET}")
@@ -893,7 +947,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
 
         p_lines = [
             f"  {p_top}",
-            f"  {p_row(f'  {YELLOW}{BOLD}🚪 PUZZLE #{puzzle.door_number:02d} • Convert to 3-Digit Octal Code{RESET}')}",
+            f"  {p_row(f'  {YELLOW}{BOLD}PUZZLE #{puzzle.door_number:02d} • Convert to 3-Digit Octal Code{RESET}')}",
             f"  {p_div}",
             f"  {p_row(f'  Symbolic Pattern : {BOLD}{WHITE}{puzzle.permission}{RESET}')}",
             f"  {p_row(f'    • {GREEN}User   (u){RESET}   : {WHITE}{u_sym}{RESET}   (r=4, w=2, x=1, -=0)')}",
@@ -959,7 +1013,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
                 print(f"  {h_line}")
             print()
             for rl in [
-                f"  {YELLOW}{BOLD}[ 📖 PERMISSIONS FORMULA ]{RESET}",
+                f"  {YELLOW}{BOLD}[ PERMISSIONS FORMULA ]{RESET}",
                 f"  {WHITE}Triads : {GREEN}[User/Owner]{WHITE} {CYAN}[Group]{WHITE} {MAGENTA}[Others]{RESET}",
                 f"  {WHITE}Values : {BOLD}r (read) = 4{RESET}  |  {BOLD}w (write) = 2{RESET}  |  {BOLD}x (execute) = 1{RESET}  |  {DIM}- = 0{RESET}",
                 f"  {DIM}Example: rwxr-xr-x -> User: 4+2+1=7 | Group: 4+0+1=5 | Others: 4+0+1=5  =>  755{RESET}",
@@ -999,7 +1053,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
             o_val = o_r + o_w + o_x
 
             feedback = [
-                f"  {RED}{BOLD}❌ '{guess}' is not correct for '{puzzle.permission}'.{RESET}",
+                f"  {RED}{BOLD}[X] '{guess}' is not correct for '{puzzle.permission}'.{RESET}",
                 f"  {YELLOW}Let's calculate step by step:{RESET}",
                 f"    • {GREEN}User   '{u_sym}'{RESET} : {u_r} + {u_w} + {u_x} = {BOLD}{u_val}{RESET}",
                 f"    • {CYAN}Group  '{g_sym}'{RESET} : {g_r} + {g_w} + {g_x} = {BOLD}{g_val}{RESET}",
@@ -1181,6 +1235,8 @@ def interactive_game_loop(
 
         cwd_path = vfs.get_cwd_path()
         cwd_short = cwd_path.replace(f"/home/{vfs.user}", "~")
+        u_name = (player.character_name or "explorer").lower().replace(" ", "-")
+        prompt_prefix = f"{GREEN}{u_name}@cybershell:{cwd_short}$"
 
         # Usable dimensions for 4-pane layout
         usable_w = max(40, width - 2) if width > 42 else max(40, width - 1)
@@ -1272,6 +1328,7 @@ def interactive_game_loop(
 
         # 3. Bottom-Right Pane: Terminal Pet (Byte)
         pet = get_terminal_pet()
+        pet.set_player_name(player.character_name)
         mascot_content = pet.render(width=docs_inner_w + 2, height=6, styled=True)
 
         # 4. Render 4-Pane Opencode Layout
@@ -1296,7 +1353,7 @@ def interactive_game_loop(
         sys.stdout.flush()
 
         try:
-            prompt = f"{BOLD}{theme.fg_green}byte@adventure{RESET}:{BOLD}{theme.fg_blue}{cwd_short}{RESET}$ "
+            prompt = f"{BOLD}{theme.fg_green}{u_name}@cybershell{RESET}:{BOLD}{theme.fg_blue}{cwd_short}{RESET}$ "
             user_input = input(prompt).strip()
         except (KeyboardInterrupt, EOFError):
             save_game(player, cadet_mode)
@@ -1347,21 +1404,21 @@ def interactive_game_loop(
             for o in quest.objectives:
                 o.completed = False
             pet.react_error()
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ reset{RESET}")
+            terminal_logs.append(f"{prompt_prefix} reset{RESET}")
             terminal_logs.append(f"{CYAN}[!] Current challenge reset. Sector filesystem restored to fresh state.{RESET}")
             continue
 
         if input_lower in (":pet", "pet"):
             new_state = pet.toggle()
             status_txt = "awake & active" if new_state else "resting"
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ pet{RESET}")
+            terminal_logs.append(f"{prompt_prefix} pet{RESET}")
             terminal_logs.append(f"{CYAN}[+] Terminal Pet Byte is now {status_txt}.{RESET}")
             continue
 
         if input_lower in (":rain", "rain"):
             ambience = get_ambience_manager()
             r_on = ambience.toggle_rain()
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ rain{RESET}")
+            terminal_logs.append(f"{prompt_prefix} rain{RESET}")
             terminal_logs.append(f"{CYAN}[+] Ambient rain effect is now {'ON' if r_on else 'OFF'} (light shaded).{RESET}")
             continue
 
@@ -1381,7 +1438,7 @@ def interactive_game_loop(
             perm_val = parts[1].strip() if len(parts) > 1 else ""
             if perm_val == "--decode" and len(parts) > 2:
                 perm_val = parts[2].strip()
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             if perm_val:
                 decoded_txt = format_decoded_permission(perm_val, styled=True)
                 for d_line in decoded_txt.splitlines():
@@ -1399,7 +1456,7 @@ def interactive_game_loop(
             elif len(parts) == 2 and not vfs.exists(parts[1]):
                 from cybershell.tools.minigames.chmod_decoder import format_decoded_permission
                 perm_candidate = parts[1]
-                terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+                terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
                 decoded_txt = format_decoded_permission(perm_candidate, styled=True)
                 for d_line in decoded_txt.splitlines():
                     terminal_logs.append(d_line)
@@ -1409,7 +1466,7 @@ def interactive_game_loop(
         if input_lower in (":anim", "anim"):
             ambience = get_ambience_manager()
             a_on = ambience.toggle_calm_animations()
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ anim{RESET}")
+            terminal_logs.append(f"{prompt_prefix} anim{RESET}")
             terminal_logs.append(f"{CYAN}[+] Calm animations are now {'ON' if a_on else 'OFF'}.{RESET}")
             continue
 
@@ -1425,7 +1482,7 @@ def interactive_game_loop(
         if theme_cand:
             if set_theme(theme_cand):
                 new_th = get_active_theme()
-                terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+                terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
                 terminal_logs.append(f"{BOLD}{new_th.fg_green}[✓] Active theme switched to {new_th.display_name}!{RESET}")
                 continue
 
@@ -1436,7 +1493,7 @@ def interactive_game_loop(
         if input_lower.startswith(":man ") or input_lower.startswith("man "):
             parts = user_input.split(maxsplit=1)
             cmd_name = parts[1].strip() if len(parts) > 1 else ""
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             if cmd_name:
                 field_manual_text = format_field_manual_entry(cmd_name)
                 for fm_line in field_manual_text.splitlines():
@@ -1464,7 +1521,7 @@ def interactive_game_loop(
 
         if input_lower.startswith("search "):
             query = input_lower[7:].strip()
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             if query in ("*", "all", "clear", "reset"):
                 docs_filter_term = ""
                 terminal_logs.append(f"{CYAN}[+] Local docs search filter cleared.{RESET}")
@@ -1476,14 +1533,14 @@ def interactive_game_loop(
                     terminal_logs.append(t_line)
             continue
         elif input_lower == "search":
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             docs_filter_term = ""
             terminal_logs.append(f"{CYAN}[+] Local docs search filter reset. Showing all commands.{RESET}")
             continue
 
         if input_lower == "save":
             saved = save_game(player, cadet_mode)
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ save{RESET}")
+            terminal_logs.append(f"{prompt_prefix} save{RESET}")
             if saved:
                 terminal_logs.append(f"{GREEN}[OK] Progress saved successfully!{RESET}")
             else:
@@ -1491,12 +1548,12 @@ def interactive_game_loop(
             continue
 
         if input_lower in ("status", "badges", "stats"):
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             terminal_logs.append(f"{CYAN}{BOLD}[ EXPLORER STATS ]{RESET}")
             terminal_logs.append(
                 f"  {WHITE}Explorer:{RESET} {CYAN}{player.character_name}{RESET}  "
                 f"{YELLOW}Level:{RESET} {player.current_sector + 1}/15  "
-                f"{YELLOW}⭐ XP:{RESET} {player.xp}  "
+                f"{YELLOW}XP:{RESET} {player.xp}  "
                 f"{GREEN}Streak:{RESET} {getattr(player, 'streak', 0)}"
             )
             raw_badges = getattr(player, "badges", [])
@@ -1505,7 +1562,7 @@ def interactive_game_loop(
             continue
 
         if input_lower.startswith("tree"):
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             parts = user_input.split(maxsplit=1)
             target_path = parts[1] if len(parts) > 1 else "."
             node = vfs.resolve_path(target_path)
@@ -1520,13 +1577,13 @@ def interactive_game_loop(
             continue
 
         if input_lower.startswith("explain"):
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             for el in explain_command(user_input, active_obj):
                 terminal_logs.append(el)
             continue
 
         if input_lower in ("hint", "?"):
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             if not active_obj:
                 terminal_logs.append(f"{GREEN}All goals in this level are complete! Great job!{RESET}")
             else:
@@ -1553,7 +1610,7 @@ def interactive_game_loop(
             if active_obj and getattr(active_obj, "options", None) and idx < len(active_obj.options):
                 opt_str = active_obj.options[idx]
                 cmd_to_show = opt_str.split(" - ")[0].strip()
-                terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {cmd_to_show}{RESET}")
+                terminal_logs.append(f"{prompt_prefix} {cmd_to_show}{RESET}")
                 res = interpreter.execute(cmd_to_show)
                 if res.stdout:
                     first_cmd = cmd_to_show.split()[0] if cmd_to_show.split() else ""
@@ -1575,7 +1632,7 @@ def interactive_game_loop(
         typo = check_typo_or_syntax(actual_cmd)
 
         # Execute command in VFS
-        terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {actual_cmd}{RESET}")
+        terminal_logs.append(f"{prompt_prefix} {actual_cmd}{RESET}")
         if opt_cmd is not None and opt_msg:
             terminal_logs.append(f"{CYAN}{opt_msg}{RESET}")
         result = interpreter.execute(actual_cmd)
@@ -1737,9 +1794,14 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
         xp=player.xp,
     )
 
-    # First launch shows the mandatory Field Manual & Rules screen!
+    # First launch shows the personalized onboarding, animated Tux, and mandatory Field Manual!
     if first_launch:
         width, _ = terminal_size()
+        p_name = prompt_player_onboarding(width)
+        player.character_name = p_name
+        app.character_name = p_name
+        save_game(player, cadet_mode)
+        animate_tux_welcome(character_name=player.character_name, width=width, quick=False)
         show_mandatory_field_manual(width)
         interactive_game_loop(
             character_name=player.character_name,
@@ -1771,10 +1833,11 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
             pad = max(0, inner_bw - visual_len(txt) - 2)
             return f"{side_b} {txt}{' ' * pad} {side_b}"
 
+        hero_name = player.character_name.upper() if player.character_name and player.character_name != "Byte" else "FOSS"
         splash_lines = [
             "",
             top_b,
-            splash_row(f"{BOLD}{theme.fg_cyan}{'BYTE’S LINUX ADVENTURE // FOSS EDITION'.center(inner_bw - 2)}{RESET}"),
+            splash_row(f"{BOLD}{theme.fg_cyan}{f'{hero_name} LINUX ADVENTURE // FOSS EDITION'.center(inner_bw - 2)}{RESET}"),
             div_b,
             splash_row(""),
             splash_row(f"{WHITE}{'Learn real-world Linux command mastery safely.'.center(inner_bw - 2)}{RESET}"),
@@ -1800,6 +1863,8 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                     set_theme(s_cand if s_cand in all_theme_names else splash_in.lower())
         except (KeyboardInterrupt, EOFError):
             return
+
+        animate_tux_welcome(character_name=player.character_name, width=width, quick=True)
 
     while True:
         has_save = os.path.isfile(SAVE_FILE_PATH)
@@ -1858,16 +1923,19 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                 )
             elif choice_lower in ("2", "new", "reset", "n"):
                 delete_saved_game()
+                p_name = prompt_player_onboarding(width) if sys.stdin.isatty() else character_name
                 player = PlayerStats(
-                    character_name=character_name,
+                    character_name=p_name,
                     hp=100,
                     max_hp=100,
                     xp=0,
                     current_sector=0,
                 )
+                app.character_name = p_name
                 vfs = VirtualFileSystem(default_user="byte")
                 interpreter = Interpreter(vfs=vfs)
                 all_quests = get_sector_quests()
+                animate_tux_welcome(character_name=player.character_name, width=width, quick=False)
                 show_mandatory_field_manual(width)
                 interactive_game_loop(
                     character_name=player.character_name,

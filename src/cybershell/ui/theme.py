@@ -390,6 +390,17 @@ THEMES: Dict[str, Theme] = {
         yellow="#ffe8a3", purple="#dfc7f7", red="#ffaba0",
         teal="#b5e6e8", white="#ffffff",
     ),
+    "web-minimal": Theme(
+        id="web-minimal",
+        display_name="Web Minimal",
+        is_light=False,
+        bg_dark="#0b0f19", surface="#111827", surface_light="#1f2937",
+        border="#374151", border_focus="#60a5fa",
+        text="#f3f4f6", text_muted="#9ca3af",
+        cyan="#38bdf8", blue="#60a5fa", green="#34d399",
+        yellow="#fbbf24", purple="#a78bfa", red="#f87171",
+        teal="#2dd4bf", white="#ffffff",
+    ),
 }
 
 _active_theme_id: str = "tokyo-night"
@@ -475,6 +486,8 @@ def set_theme(theme_id: str) -> bool:
         "sakura": "pastel-sakura",
         "mint": "pastel-mint",
         "peach": "pastel-peach",
+        "web": "web-minimal",
+        "minimal": "web-minimal",
     }
     if target in alias_map:
         target = alias_map[target]

@@ -283,10 +283,46 @@ FOSS_PENGUIN: str = """\
        (____/ \\____)"""
 
 
-def get_foss_penguin(styled: bool = True) -> str:
-    """Return the iconic FOSS Tux penguin in ASCII art with light blue and yellow styling."""
+def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
+    """Return the iconic FOSS Tux penguin in ASCII art with light blue and yellow styling.
+
+    Args:
+        styled: If True, apply theme ANSI colors.
+        frame: Animation state ('normal', 'blink', 'wave', 'happy').
+    """
+    eye_str = "() ()"
+    beak_str = "^"
+    top_offset = "          "
+    wing_left = " "
+    wing_right = " "
+
+    if frame == "blink":
+        eye_str = "-- --"
+    elif frame == "happy":
+        eye_str = "^^ ^^"
+        beak_str = "v"
+    elif frame == "wave":
+        wing_left = "\\"
+        wing_right = "/"
+
     if not styled:
-        return FOSS_PENGUIN
+        if frame == "normal":
+            return FOSS_PENGUIN
+        lines_raw = [
+            f"          {wing_left}.---.{wing_right}",
+            r"          /     \\",
+            f"         | {eye_str} |",
+            f"          \\  {beak_str}  /",
+            r"         .-`---'-.",
+            r"        /  .---.  \\",
+            r"       |  /     \\  |",
+            r"       | |       | |",
+            r"       |  \\     /  |",
+            r"        \\  `---'  /",
+            r"        .' (___) '.",
+            r"       (____/ \\____)",
+        ]
+        return "\n".join(lines_raw)
 
     try:
         from cybershell.ui.theme import get_active_theme
@@ -303,10 +339,10 @@ def get_foss_penguin(styled: bool = True) -> str:
     bld = BOLD
 
     lines = [
-        f"           {c_blue}.---.{rst}",
+        f"          {c_blue}{wing_left}.---.{wing_right}{rst}",
         f"          {c_blue}/     \\{rst}",
-        f"         {c_blue}| {c_white}() (){c_blue} |{rst}",
-        f"          {c_blue}\\  {bld}{c_yellow}^{rst}{c_blue}  /{rst}",
+        f"         {c_blue}| {c_white}{eye_str}{c_blue} |{rst}",
+        f"          {c_blue}\\  {bld}{c_yellow}{beak_str}{rst}{c_blue}  /{rst}",
         f"         {c_blue}.-`---'-.{rst}",
         f"        {c_blue}/  {c_white}.---.{c_blue}  \\{rst}",
         f"       {c_blue}|  {c_white}/     \\{c_blue}  |{rst}",
