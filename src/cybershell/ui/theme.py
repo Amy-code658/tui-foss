@@ -10,7 +10,8 @@ from __future__ import annotations
 import os
 import re
 import unicodedata
-from typing import List, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple, Union
 
 ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
@@ -111,7 +112,7 @@ def bg_hex(hex_str: str) -> str:
 
 
 # =============================================================================
-# Modern Color Tokens (Tokyo Night / Claude Slate Theme)
+# Modern Color Tokens & Multi-Theme System
 # =============================================================================
 
 RESET: str = "\033[0m"
@@ -120,24 +121,263 @@ DIM: str = "\033[2m"
 ITALIC: str = "\033[3m"
 UNDERLINE: str = "\033[4m"
 
-# Palette Hex Definition
-HEX_BG_DARK: str = "#1a1b26"       # Dark slate canvas
-HEX_SURFACE: str = "#24283b"       # Panel / card surface
-HEX_SURFACE_LIGHT: str = "#2f354f" # Selection / active element
-HEX_BORDER: str = "#414868"        # Subtle hairline border
-HEX_BORDER_FOCUS: str = "#7aa2f7"  # Active window border
-HEX_TEXT: str = "#c0caf5"          # Crisp primary text
-HEX_TEXT_MUTED: str = "#565f89"    # Secondary muted subtext
-HEX_CYAN: str = "#7dcfff"          # Electric cyan (focus/prompt)
-HEX_BLUE: str = "#7aa2f7"          # Tokyo blue (links/paths)
-HEX_GREEN: str = "#9ece6a"         # Emerald / spring green (success)
-HEX_YELLOW: str = "#e0af68"        # Warm amber (warnings/hints)
-HEX_PURPLE: str = "#bb9af7"        # Soft violet / magenta (badges/rare)
-HEX_RED: str = "#f7768e"           # Rose red (errors/alerts)
-HEX_TEAL: str = "#1abc9c"          # Vivid teal
-HEX_WHITE: str = "#ffffff"         # Pure white
 
-# ANSI Sequences
+@dataclass
+class Theme:
+    """Developer-inspired color theme definition."""
+
+    id: str
+    display_name: str
+    is_light: bool = False
+    bg_dark: str = "#1a1b26"
+    surface: str = "#24283b"
+    surface_light: str = "#2f354f"
+    border: str = "#414868"
+    border_focus: str = "#7aa2f7"
+    text: str = "#c0caf5"
+    text_muted: str = "#565f89"
+    cyan: str = "#7dcfff"
+    blue: str = "#7aa2f7"
+    green: str = "#9ece6a"
+    yellow: str = "#e0af68"
+    purple: str = "#bb9af7"
+    red: str = "#f7768e"
+    teal: str = "#1abc9c"
+    white: str = "#ffffff"
+
+    @property
+    def fg_cyan(self) -> str:
+        return fg_hex(self.cyan)
+
+    @property
+    def fg_blue(self) -> str:
+        return fg_hex(self.blue)
+
+    @property
+    def fg_green(self) -> str:
+        return fg_hex(self.green)
+
+    @property
+    def fg_yellow(self) -> str:
+        return fg_hex(self.yellow)
+
+    @property
+    def fg_purple(self) -> str:
+        return fg_hex(self.purple)
+
+    @property
+    def fg_red(self) -> str:
+        return fg_hex(self.red)
+
+    @property
+    def fg_white(self) -> str:
+        return fg_hex(self.white)
+
+    @property
+    def fg_teal(self) -> str:
+        return fg_hex(self.teal)
+
+    @property
+    def fg_text(self) -> str:
+        return fg_hex(self.text)
+
+    @property
+    def fg_muted(self) -> str:
+        return fg_hex(self.text_muted)
+
+    @property
+    def fg_border(self) -> str:
+        return fg_hex(self.border)
+
+    @property
+    def fg_border_focus(self) -> str:
+        return fg_hex(self.border_focus)
+
+    @property
+    def bg_surface(self) -> str:
+        return bg_hex(self.surface)
+
+    @property
+    def bg_dark_ansi(self) -> str:
+        return bg_hex(self.bg_dark)
+
+
+THEMES: Dict[str, Theme] = {
+    "tokyo-night": Theme(
+        id="tokyo-night",
+        display_name="Tokyo Night",
+        is_light=False,
+        bg_dark="#1a1b26", surface="#24283b", surface_light="#2f354f",
+        border="#414868", border_focus="#7aa2f7",
+        text="#c0caf5", text_muted="#565f89",
+        cyan="#7dcfff", blue="#7aa2f7", green="#9ece6a",
+        yellow="#e0af68", purple="#bb9af7", red="#f7768e",
+        teal="#1abc9c", white="#ffffff",
+    ),
+    "dracula": Theme(
+        id="dracula",
+        display_name="Dracula",
+        is_light=False,
+        bg_dark="#282a36", surface="#343746", surface_light="#44475a",
+        border="#6272a4", border_focus="#bd93f9",
+        text="#f8f8f2", text_muted="#929ac4",
+        cyan="#8be9fd", blue="#6272a4", green="#50fa7b",
+        yellow="#f1fa8c", purple="#bd93f9", red="#ff5555",
+        teal="#8be9fd", white="#ffffff",
+    ),
+    "catppuccin-mocha": Theme(
+        id="catppuccin-mocha",
+        display_name="Catppuccin Mocha",
+        is_light=False,
+        bg_dark="#1e1e2e", surface="#25263a", surface_light="#313244",
+        border="#45475a", border_focus="#89b4fa",
+        text="#cdd6f4", text_muted="#7f849c",
+        cyan="#89dceb", blue="#89b4fa", green="#a6e3a1",
+        yellow="#f9e2af", purple="#cba6f7", red="#f38ba8",
+        teal="#94e2d5", white="#ffffff",
+    ),
+    "catppuccin-latte": Theme(
+        id="catppuccin-latte",
+        display_name="Catppuccin Latte (Light)",
+        is_light=True,
+        bg_dark="#eff1f5", surface="#e6e9ef", surface_light="#ccd0da",
+        border="#bcc0cc", border_focus="#1e66f5",
+        text="#4c4f69", text_muted="#8c8fa1",
+        cyan="#04a5e5", blue="#1e66f5", green="#40a02b",
+        yellow="#df8e1d", purple="#8839ef", red="#d20f39",
+        teal="#179299", white="#202020",
+    ),
+    "nord": Theme(
+        id="nord",
+        display_name="Nord",
+        is_light=False,
+        bg_dark="#2e3440", surface="#3b4252", surface_light="#434c5e",
+        border="#4c566a", border_focus="#88c0d0",
+        text="#eceff4", text_muted="#7b88a1",
+        cyan="#88c0d0", blue="#81a1c1", green="#a3be8c",
+        yellow="#ebcb8b", purple="#b48ead", red="#bf616a",
+        teal="#8fbcbb", white="#ffffff",
+    ),
+    "everforest": Theme(
+        id="everforest",
+        display_name="Everforest",
+        is_light=False,
+        bg_dark="#2d353b", surface="#343f44", surface_light="#3d484d",
+        border="#475258", border_focus="#a7c080",
+        text="#d3c6aa", text_muted="#7a8478",
+        cyan="#7fbbb3", blue="#83c092", green="#a7c080",
+        yellow="#dbbc7f", purple="#d699b6", red="#e67e80",
+        teal="#83c092", white="#ffffff",
+    ),
+    "gruvbox": Theme(
+        id="gruvbox",
+        display_name="Gruvbox Dark",
+        is_light=False,
+        bg_dark="#282828", surface="#32302f", surface_light="#3c3836",
+        border="#504945", border_focus="#fabd2f",
+        text="#ebdbb2", text_muted="#928374",
+        cyan="#8ec07c", blue="#83a598", green="#b8bb26",
+        yellow="#fabd2f", purple="#d3869b", red="#fb4934",
+        teal="#8ec07c", white="#ffffff",
+    ),
+    "solarized-dark": Theme(
+        id="solarized-dark",
+        display_name="Solarized Dark",
+        is_light=False,
+        bg_dark="#002b36", surface="#073642", surface_light="#0d4250",
+        border="#586e75", border_focus="#268bd2",
+        text="#839496", text_muted="#657b83",
+        cyan="#2aa198", blue="#268bd2", green="#859900",
+        yellow="#b58900", purple="#6c71c4", red="#dc322f",
+        teal="#2aa198", white="#fdf6e3",
+    ),
+    "solarized-light": Theme(
+        id="solarized-light",
+        display_name="Solarized Light",
+        is_light=True,
+        bg_dark="#fdf6e3", surface="#eee8d5", surface_light="#e0dac5",
+        border="#93a1a1", border_focus="#268bd2",
+        text="#586e75", text_muted="#839496",
+        cyan="#2aa198", blue="#268bd2", green="#859900",
+        yellow="#b58900", purple="#6c71c4", red="#dc322f",
+        teal="#2aa198", white="#002b36",
+    ),
+    "one-dark": Theme(
+        id="one-dark",
+        display_name="One Dark",
+        is_light=False,
+        bg_dark="#282c34", surface="#2f343e", surface_light="#353b45",
+        border="#4b5263", border_focus="#61afef",
+        text="#abb2bf", text_muted="#5c6370",
+        cyan="#56b6c2", blue="#61afef", green="#98c379",
+        yellow="#e5c07b", purple="#c678dd", red="#e06c75",
+        teal="#56b6c2", white="#ffffff",
+    ),
+    "monokai": Theme(
+        id="monokai",
+        display_name="Monokai",
+        is_light=False,
+        bg_dark="#272822", surface="#32342b", surface_light="#3e3d32",
+        border="#49483e", border_focus="#66d9ef",
+        text="#f8f8f2", text_muted="#75715e",
+        cyan="#66d9ef", blue="#66d9ef", green="#a6e22e",
+        yellow="#e6db74", purple="#ae81ff", red="#f92672",
+        teal="#a6e22e", white="#ffffff",
+    ),
+    "rose-pine": Theme(
+        id="rose-pine",
+        display_name="Rosé Pine",
+        is_light=False,
+        bg_dark="#191724", surface="#1f1d2e", surface_light="#26233a",
+        border="#403d52", border_focus="#c4a7e7",
+        text="#e0def4", text_muted="#6e6a86",
+        cyan="#9ccfd8", blue="#31748f", green="#ebbcba",
+        yellow="#f6c177", purple="#c4a7e7", red="#eb6f92",
+        teal="#9ccfd8", white="#ffffff",
+    ),
+    "foss": Theme(
+        id="foss",
+        display_name="FOSS",
+        is_light=False,
+        bg_dark="#161c28", surface="#1e2638", surface_light="#28344d",
+        border="#3b527a", border_focus="#58a6ff",
+        text="#e6edf3", text_muted="#7d8ea6",
+        cyan="#79c0ff", blue="#58a6ff", green="#7ee787",
+        yellow="#f1e05a", purple="#bc8cff", red="#ff7b72",
+        teal="#56d364", white="#ffffff",
+    ),
+}
+
+_active_theme_id: str = "tokyo-night"
+
+
+def list_themes() -> List[Theme]:
+    """Return list of all registered color themes."""
+    return list(THEMES.values())
+
+
+def get_active_theme() -> Theme:
+    """Return currently active color theme."""
+    return THEMES.get(_active_theme_id, THEMES["tokyo-night"])
+
+
+# Dynamic module-level hex & ANSI sequences
+HEX_BG_DARK: str = THEMES["tokyo-night"].bg_dark
+HEX_SURFACE: str = THEMES["tokyo-night"].surface
+HEX_SURFACE_LIGHT: str = THEMES["tokyo-night"].surface_light
+HEX_BORDER: str = THEMES["tokyo-night"].border
+HEX_BORDER_FOCUS: str = THEMES["tokyo-night"].border_focus
+HEX_TEXT: str = THEMES["tokyo-night"].text
+HEX_TEXT_MUTED: str = THEMES["tokyo-night"].text_muted
+HEX_CYAN: str = THEMES["tokyo-night"].cyan
+HEX_BLUE: str = THEMES["tokyo-night"].blue
+HEX_GREEN: str = THEMES["tokyo-night"].green
+HEX_YELLOW: str = THEMES["tokyo-night"].yellow
+HEX_PURPLE: str = THEMES["tokyo-night"].purple
+HEX_RED: str = THEMES["tokyo-night"].red
+HEX_TEAL: str = THEMES["tokyo-night"].teal
+HEX_WHITE: str = THEMES["tokyo-night"].white
+
 FG_TEXT: str = fg_hex(HEX_TEXT)
 FG_MUTED: str = fg_hex(HEX_TEXT_MUTED)
 FG_BORDER: str = fg_hex(HEX_BORDER)
@@ -150,12 +390,131 @@ FG_PURPLE: str = fg_hex(HEX_PURPLE)
 FG_RED: str = fg_hex(HEX_RED)
 FG_WHITE: str = fg_hex(HEX_WHITE)
 
+# Convenience & backward-compatibility color aliases
+CYAN: str = FG_CYAN
+BLUE: str = FG_BLUE
+GREEN: str = FG_GREEN
+YELLOW: str = FG_YELLOW
+MAGENTA: str = FG_PURPLE
+PURPLE: str = FG_PURPLE
+RED: str = FG_RED
+WHITE: str = FG_WHITE
+
 BG_SURFACE: str = bg_hex(HEX_SURFACE)
 BG_SURFACE_LIGHT: str = bg_hex(HEX_SURFACE_LIGHT)
 BG_BLUE: str = bg_hex(HEX_BLUE)
 BG_GREEN: str = bg_hex(HEX_GREEN)
 BG_PURPLE: str = bg_hex(HEX_PURPLE)
 BG_CYAN: str = bg_hex(HEX_CYAN)
+
+
+def set_theme(theme_id: str) -> bool:
+    """Set the active color theme and refresh global color tokens.
+
+    Returns:
+        True if theme was successfully changed, False otherwise.
+    """
+    global _active_theme_id
+    global HEX_BG_DARK, HEX_SURFACE, HEX_SURFACE_LIGHT, HEX_BORDER, HEX_BORDER_FOCUS
+    global HEX_TEXT, HEX_TEXT_MUTED, HEX_CYAN, HEX_BLUE, HEX_GREEN, HEX_YELLOW
+    global HEX_PURPLE, HEX_RED, HEX_TEAL, HEX_WHITE
+    global FG_TEXT, FG_MUTED, FG_BORDER, FG_BORDER_FOCUS, FG_CYAN, FG_BLUE
+    global FG_GREEN, FG_YELLOW, FG_PURPLE, FG_RED, FG_WHITE
+    global CYAN, BLUE, GREEN, YELLOW, MAGENTA, PURPLE, RED, WHITE
+    global BG_SURFACE, BG_SURFACE_LIGHT, BG_BLUE, BG_GREEN, BG_PURPLE, BG_CYAN
+
+    target = theme_id.strip().lower()
+    if target == "catppuccin":
+        target = "catppuccin-mocha"
+    if target not in THEMES:
+        # Check by display name match
+        matched = next((t for t in THEMES.values() if t.display_name.lower() == target), None)
+        if not matched:
+            return False
+        target = matched.id
+
+    _active_theme_id = target
+    t = THEMES[target]
+
+    HEX_BG_DARK = t.bg_dark
+    HEX_SURFACE = t.surface
+    HEX_SURFACE_LIGHT = t.surface_light
+    HEX_BORDER = t.border
+    HEX_BORDER_FOCUS = t.border_focus
+    HEX_TEXT = t.text
+    HEX_TEXT_MUTED = t.text_muted
+    HEX_CYAN = t.cyan
+    HEX_BLUE = t.blue
+    HEX_GREEN = t.green
+    HEX_YELLOW = t.yellow
+    HEX_PURPLE = t.purple
+    HEX_RED = t.red
+    HEX_TEAL = t.teal
+    HEX_WHITE = t.white
+
+    FG_TEXT = fg_hex(HEX_TEXT)
+    FG_MUTED = fg_hex(HEX_TEXT_MUTED)
+    FG_BORDER = fg_hex(HEX_BORDER)
+    FG_BORDER_FOCUS = fg_hex(HEX_BORDER_FOCUS)
+    FG_CYAN = fg_hex(HEX_CYAN)
+    FG_BLUE = fg_hex(HEX_BLUE)
+    FG_GREEN = fg_hex(HEX_GREEN)
+    FG_YELLOW = fg_hex(HEX_YELLOW)
+    FG_PURPLE = fg_hex(HEX_PURPLE)
+    FG_RED = fg_hex(HEX_RED)
+    FG_WHITE = fg_hex(HEX_WHITE)
+
+    CYAN = FG_CYAN
+    BLUE = FG_BLUE
+    GREEN = FG_GREEN
+    YELLOW = FG_YELLOW
+    MAGENTA = FG_PURPLE
+    PURPLE = FG_PURPLE
+    RED = FG_RED
+    WHITE = FG_WHITE
+
+    BG_SURFACE = bg_hex(HEX_SURFACE)
+    BG_SURFACE_LIGHT = bg_hex(HEX_SURFACE_LIGHT)
+    BG_BLUE = bg_hex(HEX_BLUE)
+    BG_GREEN = bg_hex(HEX_GREEN)
+    BG_PURPLE = bg_hex(HEX_PURPLE)
+    BG_CYAN = bg_hex(HEX_CYAN)
+
+    import sys
+    for mod_name in (
+        "cybershell.ui.theme",
+        "cybershell.ui.ascii_art",
+        "cybershell.run",
+        "cybershell.ui.renderer",
+        "cybershell.ui.pet",
+        "cybershell.ui.dashboard",
+        "cybershell.ui.command_center",
+    ):
+        if mod_name in sys.modules:
+            mod = sys.modules[mod_name]
+            setattr(mod, "FG_TEXT", FG_TEXT)
+            setattr(mod, "FG_MUTED", FG_MUTED)
+            setattr(mod, "FG_BORDER", FG_BORDER)
+            setattr(mod, "FG_BORDER_FOCUS", FG_BORDER_FOCUS)
+            setattr(mod, "FG_CYAN", FG_CYAN)
+            setattr(mod, "FG_BLUE", FG_BLUE)
+            setattr(mod, "FG_GREEN", FG_GREEN)
+            setattr(mod, "FG_YELLOW", FG_YELLOW)
+            setattr(mod, "FG_PURPLE", FG_PURPLE)
+            setattr(mod, "FG_RED", FG_RED)
+            setattr(mod, "FG_WHITE", FG_WHITE)
+            setattr(mod, "BG_SURFACE", BG_SURFACE)
+            setattr(mod, "BG_SURFACE_LIGHT", BG_SURFACE_LIGHT)
+            setattr(mod, "CYAN", FG_CYAN)
+            setattr(mod, "BLUE", FG_BLUE)
+            setattr(mod, "GREEN", FG_GREEN)
+            setattr(mod, "YELLOW", FG_YELLOW)
+            setattr(mod, "MAGENTA", FG_PURPLE)
+            setattr(mod, "RED", FG_RED)
+            setattr(mod, "WHITE", FG_TEXT)
+
+    return True
+
 
 
 # =============================================================================

@@ -1,0 +1,343 @@
+"""Comprehensive tests for Byte's Linux Adventure modern TUI features.
+
+Covers:
+1. 12 Developer Themes & Theme Engine
+2. Context-Aware Field Manual & Codex contextual prioritization
+3. Terminal Pet companion state machine & rendering (no emojis)
+4. Ambience Manager (rain, calm animations, pulse)
+5. Progress Dashboard (metrics, accuracy, topic breakdown)
+6. Mini-games: Terminal Snake, Vim Dojo, Typing Dojo (safe string drill)
+7. Command Center palette rendering
+"""
+
+import unittest
+from cybershell.contracts import PlayerStats
+from cybershell.ui.theme import (
+    THEMES,
+    Theme,
+    list_themes,
+    get_active_theme,
+    set_theme,
+)
+from cybershell.tools.codex import (
+    Codex,
+    format_field_manual_entry,
+    get_contextual_commands,
+)
+from cybershell.ui.pet import TerminalPet, get_terminal_pet
+from cybershell.ui.ambience import AmbienceManager, get_ambience_manager
+from cybershell.ui.dashboard import (
+    render_progress_bar,
+    render_progress_dashboard,
+    TOPICS,
+)
+from cybershell.tools.minigames.snake import TerminalSnake
+from cybershell.tools.minigames.vim_dojo import VimDojo
+from cybershell.tools.minigames.typing_dojo import TypingDojo
+from cybershell.tools.minigames.hub import render_minigames_menu
+from cybershell.ui.command_center import render_command_center, PALETTE_ACTIONS
+
+
+class TestThemes(unittest.TestCase):
+    """Verify 13 developer color themes and switching mechanism."""
+
+    def test_thirteen_themes_registered(self) -> None:
+        themes = list_themes()
+        self.assertEqual(len(themes), 13)
+        theme_ids = {t.id for t in themes}
+        required_ids = {
+            "tokyo-night",
+            "dracula",
+            "catppuccin-mocha",
+            "catppuccin-latte",
+            "nord",
+            "everforest",
+            "gruvbox",
+            "solarized-dark",
+            "solarized-light",
+            "one-dark",
+            "monokai",
+            "rose-pine",
+            "foss",
+        }
+        self.assertTrue(required_ids.issubset(theme_ids))
+
+    def test_theme_switching(self) -> None:
+        success = set_theme("dracula")
+        self.assertTrue(success)
+        active = get_active_theme()
+        self.assertEqual(active.id, "dracula")
+
+        # Case-insensitive / display name
+        success_name = set_theme("Nord")
+        self.assertTrue(success_name)
+        self.assertEqual(get_active_theme().id, "nord")
+
+        # Invalid theme
+        invalid = set_theme("nonexistent-theme-xyz")
+        self.assertFalse(invalid)
+
+        # Reset to tokyo-night
+        set_theme("tokyo-night")
+
+    def test_theme_colors_and_ansi_properties(self) -> None:
+        set_theme("tokyo-night")
+        tn = get_active_theme()
+        set_theme("dracula")
+        drac = get_active_theme()
+        self.assertNotEqual(tn.fg_purple, drac.fg_purple)
+        self.assertNotEqual(tn.fg_cyan, drac.fg_cyan)
+        self.assertTrue(drac.fg_white.startswith("\033["))
+        self.assertTrue(drac.fg_green.startswith("\033["))
+        set_theme("tokyo-night")
+
+
+class TestFieldManualAndCodex(unittest.TestCase):
+    """Verify Context-Aware Field Manual and command relevance."""
+
+    def test_field_manual_formatting(self) -> None:
+        entry = format_field_manual_entry("mkdir")
+        self.assertIn("mkdir — ", entry)
+        self.assertIn("Purpose:", entry)
+        self.assertIn("Syntax:", entry)
+        self.assertIn("Explanation:", entry)
+        self.assertIn("Example:", entry)
+        self.assertIn("Related:", entry)
+
+    def test_field_manual_unknown_command(self) -> None:
+        entry = format_field_manual_entry("supercalifragilistic")
+        self.assertIn("No Field Manual entry", entry)
+
+    def test_contextual_commands_prioritization(self) -> None:
+        codex = Codex()
+        # Request with touch & mkdir relevant to challenge
+        results = codex.get_contextual_commands(relevant_cmds=["touch", "mkdir"], limit=5)
+        names = [r["name"] for r in results]
+        self.assertEqual(names[0], "mkdir")
+        self.assertEqual(names[1], "touch")
+
+
+class TestTerminalPet(unittest.TestCase):
+    """Verify ASCII Terminal Pet reactions and rendering."""
+
+    def setUp(self) -> None:
+        self.pet = TerminalPet(name="Byte", enabled=True)
+
+    def test_pet_success_reaction_and_streak(self) -> None:
+        self.pet.react_success("ls")
+        self.assertEqual(self.pet.state, "happy")
+        self.assertEqual(self.pet.streak_count, 1)
+
+        # Trigger streak
+        self.pet.react_success("cd")
+        self.pet.react_success("cat")
+        self.assertEqual(self.pet.state, "celebrating")
+        self.assertEqual(self.pet.streak_count, 3)
+
+    def test_pet_error_reaction(self) -> None:
+        self.pet.react_success("ls")
+        self.pet.react_error("No such file")
+        self.assertEqual(self.pet.state, "confused")
+        self.assertEqual(self.pet.streak_count, 0)
+
+    def test_pet_toggle(self) -> None:
+        self.assertTrue(self.pet.enabled)
+        new_state = self.pet.toggle()
+        self.assertFalse(new_state)
+        self.assertFalse(self.pet.enabled)
+
+    def test_pet_render_no_emojis(self) -> None:
+        rendered_lines = self.pet.render(width=24, height=6, styled=False)
+        self.assertEqual(len(rendered_lines), 6)
+        joined = "".join(rendered_lines)
+        self.assertIn("Byte", joined)
+        # Check no emojis in sprites
+        for char in joined:
+            self.assertLess(ord(char), 0x1000, f"Emoji or non-ascii/latin character found: {char!r}")
+
+
+class TestAmbienceManager(unittest.TestCase):
+    """Verify ambient rain and calm animations."""
+
+    def setUp(self) -> None:
+        self.ambience = AmbienceManager()
+
+    def test_toggle_states(self) -> None:
+        self.assertFalse(self.ambience.rain_enabled)
+        self.assertTrue(self.ambience.toggle_rain())
+        self.assertTrue(self.ambience.rain_enabled)
+
+        self.assertFalse(self.ambience.calm_animations)
+        self.assertTrue(self.ambience.toggle_calm_animations())
+        self.assertTrue(self.ambience.calm_animations)
+
+        summary = self.ambience.get_status_summary()
+        self.assertIn("Rain: ON", summary)
+        self.assertIn("Calm Anim: ON", summary)
+
+    def test_rain_backdrop_generation(self) -> None:
+        self.ambience.rain_enabled = True
+        backdrop = self.ambience.generate_rain_backdrop(width=40, height=5)
+        self.assertEqual(len(backdrop), 5)
+
+    def test_rain_line_and_padding_lengths(self) -> None:
+        from cybershell.ui.renderer import visual_len
+        self.ambience.rain_enabled = True
+        line = self.ambience.render_rain_line(50, density=0.20)
+        self.assertEqual(visual_len(line), 50)
+
+        padded = self.ambience.pad_with_rain("Hello World", 40)
+        self.assertEqual(visual_len(padded), 40)
+        self.assertTrue(padded.startswith("Hello World"))
+
+        # When rain is disabled
+        self.ambience.rain_enabled = False
+        plain_padded = self.ambience.pad_with_rain("Hello", 20)
+        self.assertEqual(visual_len(plain_padded), 20)
+        self.assertEqual(plain_padded, "Hello" + (" " * 15))
+
+
+class TestProgressDashboard(unittest.TestCase):
+    """Verify dashboard metrics and topic breakdown."""
+
+    def test_progress_bar_calculation(self) -> None:
+        zero_bar = render_progress_bar(0.0, bar_width=10, styled=False)
+        self.assertIn("0%", zero_bar)
+        full_bar = render_progress_bar(1.0, bar_width=10, styled=False)
+        self.assertIn("100%", full_bar)
+
+    def test_dashboard_rendering(self) -> None:
+        player = PlayerStats(character_name="TestHero")
+        player.completed_sectors = [0, 1, 2]
+        player.level = 2
+        player.streak = 3
+        player.max_streak = 5
+        output = render_progress_dashboard(player, width=80, styled=False)
+        self.assertIn("PROGRESS & SKILL DASHBOARD", output)
+        self.assertIn("3 of 27 complete", output)
+        self.assertIn("TestHero", output)
+        self.assertIn("Navigation", output)
+        self.assertIn("TOPIC BREAKDOWN", output)
+
+
+class TestMiniGames(unittest.TestCase):
+    """Verify Snake, Vim Dojo, and Typing Dojo."""
+
+    def test_snake_mechanics(self) -> None:
+        snake = TerminalSnake(width=20, height=10, target_goals=3)
+        self.assertFalse(snake.game_over)
+        initial_score = snake.score
+        # Step right
+        alive = snake.step("d")
+        self.assertTrue(alive)
+
+    def test_vim_dojo_mechanics(self) -> None:
+        dojo = VimDojo(target_count=3)
+        self.assertEqual(dojo.hits, 0)
+        target_key = dojo.current_target["key"]
+        # Strike correctly
+        hit = dojo.step(target_key)
+        self.assertTrue(hit)
+        self.assertEqual(dojo.hits, 1)
+
+        # Strike wrong key
+        wrong_key = "zzz_not_vim"
+        miss = dojo.step(wrong_key)
+        self.assertFalse(miss)
+        self.assertEqual(dojo.misses, 1)
+
+    def test_typing_dojo_safety_and_scoring(self) -> None:
+        dojo = TypingDojo(rounds=2)
+        # Verify text is purely compared as string and never executed
+        prompt = dojo.current_prompt
+        exact, acc = dojo.step(prompt)
+        self.assertTrue(exact)
+        self.assertEqual(acc, 100.0)
+        self.assertGreater(dojo.wpm, 0.0)
+
+    def test_minigames_hub_menu(self) -> None:
+        menu = render_minigames_menu(width=65, styled=False)
+        self.assertIn("CYBERSHELL ARCADE", menu)
+        self.assertIn("Terminal Snake", menu)
+        self.assertIn("Vim Dojo", menu)
+        self.assertIn("Typing Dojo", menu)
+
+
+class TestCommandCenter(unittest.TestCase):
+    """Verify developer Command Center palette."""
+
+    def test_command_center_render(self) -> None:
+        player = PlayerStats()
+        palette = render_command_center(player, width=74, styled=False)
+        self.assertIn("COMMAND CENTER // PALETTE", palette)
+        self.assertIn("Search Local Documentation", palette)
+        self.assertIn("Choose Challenge", palette)
+        self.assertIn("View Progress Dashboard", palette)
+        self.assertIn("Open Mini-Games Hub", palette)
+        self.assertIn("Open Field Manual", palette)
+        self.assertIn("Reset Current Challenge", palette)
+        self.assertIn("Toggle Terminal Pet", palette)
+        self.assertIn("Color Theme Selector", palette)
+
+    def test_command_center_feedback_banner(self) -> None:
+        player = PlayerStats()
+        palette = render_command_center(player, width=74, styled=True, status_msg="Theme changed to Dracula!")
+        self.assertIn("Theme changed to Dracula!", palette)
+
+
+class TestLayoutDynamicThemingAndRain(unittest.TestCase):
+    """Verify 4-pane layout with dynamic themes and rain."""
+
+    def test_draw_opencode_layout_with_rain(self) -> None:
+        from cybershell.ui.renderer import draw_opencode_layout, visual_len
+        ambience = get_ambience_manager()
+        ambience.rain_enabled = True
+        set_theme("dracula")
+
+        layout = draw_opencode_layout(
+            task_title="YOUR TASK", task_content=["Line 1", "Line 2"],
+            term_title="TERMINAL", term_content=["echo test"],
+            docs_title="LOCAL DOCS", docs_content=["ls", "pwd"],
+            mascot_content=["Byte"],
+            width=80, height=20, styled=True
+        )
+        self.assertIn("YOUR TASK", layout)
+        self.assertIn("TERMINAL", layout)
+        self.assertIn("LOCAL DOCS", layout)
+        self.assertIn("BYTE", layout)
+
+        # Check line width consistency
+        for line in layout.splitlines():
+            self.assertEqual(visual_len(line), 78)
+
+        # Reset state
+        ambience.rain_enabled = False
+        set_theme("tokyo-night")
+
+    def test_chmod_permission_decoder(self) -> None:
+        from cybershell.tools.minigames.chmod_decoder import decode_permission_details, format_decoded_permission
+        
+        info_755 = decode_permission_details("755")
+        self.assertIsNotNone(info_755)
+        self.assertEqual(info_755["octal"], "755")
+        self.assertEqual(info_755["symbolic"], "rwxr-xr-x")
+        self.assertEqual(info_755["binary"], "111 101 101")
+        
+        formatted = format_decoded_permission(info_755, width=70)
+        self.assertTrue(len(formatted.splitlines()) > 5)
+        self.assertIn("User/Owner", formatted)
+
+        # Test symbolic input
+        info_rwx = decode_permission_details("rwxrwxrwx")
+        self.assertIsNotNone(info_rwx)
+        self.assertEqual(info_rwx["octal"], "777")
+
+    def test_foss_penguin_ascii(self) -> None:
+        from cybershell.ui.ascii_art import get_foss_penguin
+        penguin = get_foss_penguin(styled=False)
+        self.assertTrue(len(penguin.splitlines()) >= 5)
+        self.assertIn("() ()", penguin)
+
+
+if __name__ == "__main__":
+    unittest.main()

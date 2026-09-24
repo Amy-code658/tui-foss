@@ -465,7 +465,7 @@ def draw_control_footer(
 ) -> str:
     """Render a context-sensitive footer showing available controls."""
     if screen_type == "terminal":
-        text = "ENTER Run    ↑↓ History    ESC Menu    ? Help"
+        text = ":cmd Palette  |  :progress Dashboard  |  :games Arcade  |  :reset Reset  |  help"
     elif screen_type == "menu":
         text = "↑↓ Select    ENTER Choose    ESC Back"
     else:
@@ -601,18 +601,28 @@ def draw_split_panels(
     )
 
 
-def draw_fixed_panel(title: str, content: Iterable[str], width: int, height: int, styled: bool = False, border_color: str = "") -> List[str]:
-    """Render a rounded panel that is exactly width x height."""
+def draw_fixed_panel(
+    title: str,
+    content: Iterable[str],
+    width: int,
+    height: int,
+    styled: bool = False,
+    border_color: str = "",
+    rain_enabled: bool = False,
+    rain_color: str = "",
+    row_offset: int = 0,
+) -> List[str]:
+    """Render a rounded panel that is exactly width x height with physics falling rain."""
     width = max(8, width)
     height = max(3, height)
     inner_width = width - 2
     content_width = inner_width - 2
-    
+
     b_col = border_color if styled else ""
     b_rst = "\033[0m" if styled and b_col else ""
-    
+
     lines = [b_col + PANEL_TOP_LEFT + PANEL_HORIZONTAL * (width - 2) + PANEL_TOP_RIGHT + b_rst]
-    
+
     title_text = truncate_styled(f" {title} ", content_width)
     lines.append(
         b_col + PANEL_VERTICAL + b_rst
@@ -621,20 +631,37 @@ def draw_fixed_panel(title: str, content: Iterable[str], width: int, height: int
         + " "
         + b_col + PANEL_VERTICAL + b_rst
     )
-    
+
     content_lines = list(content)
     max_content = height - 3
     for i in range(max_content):
-        item = str(content_lines[i]) if i < len(content_lines) else ""
-        item = truncate_styled(item, content_width)
+        curr_row = row_offset + i + 2
+        raw_item = str(content_lines[i]) if i < len(content_lines) else ""
+        if rain_enabled and styled and not raw_item.strip():
+            try:
+                from cybershell.ui.ambience import get_ambience_manager
+                item = get_ambience_manager().render_rain_line(content_width, row=curr_row, color=rain_color)
+            except Exception:
+                item = pad_to_width("", content_width)
+        else:
+            item = truncate_styled(raw_item, content_width)
+            if rain_enabled and styled:
+                try:
+                    from cybershell.ui.ambience import get_ambience_manager
+                    item = get_ambience_manager().pad_with_rain(item, content_width, row=curr_row, color=rain_color)
+                except Exception:
+                    item = pad_to_width(item, content_width)
+            else:
+                item = pad_to_width(item, content_width)
+
         lines.append(
             b_col + PANEL_VERTICAL + b_rst
             + " "
-            + pad_to_width(item, content_width)
+            + item
             + " "
             + b_col + PANEL_VERTICAL + b_rst
         )
-        
+
     lines.append(b_col + PANEL_BOTTOM_LEFT + PANEL_HORIZONTAL * (width - 2) + PANEL_BOTTOM_RIGHT + b_rst)
     return lines
 
@@ -648,34 +675,87 @@ def draw_opencode_layout(
     gap: int = 1,
     styled: bool = True
 ) -> str:
-    """Render a 4-pane Opencode style layout exactly matching terminal height."""
-    usable_width = max(40, width - 1) if width > 40 else width
+    """Render a 4-pane Opencode style layout dynamically styled with active theme and ambient rain."""
+    usable_width = max(40, width - 2) if width > 42 else max(40, width - 1)
     left_width = int(usable_width * 0.65)
     right_width = usable_width - left_width - gap
-    
+
     needed_task_height = len(task_content) + 3  # +3 for borders and title padding
     max_task_height = max(5, height - 8)        # Leave at least 8 lines for the terminal
     task_height = max(5, min(needed_task_height, max_task_height))
     term_height = height - task_height
-    
+
     mascot_height = min(max(7, len(mascot_content) + 2), max(6, int(height * 0.40)))
     docs_height = height - mascot_height
-    
+
     term_max_content = term_height - 3
     sliced_term = term_content[-term_max_content:] if len(term_content) > term_max_content else term_content
-    
-    task_panel = draw_fixed_panel(task_title, task_content, left_width, task_height, styled=styled, border_color="\033[38;2;187;154;247m")  # HEX_PURPLE
-    term_panel = draw_fixed_panel(term_title, sliced_term, left_width, term_height, styled=styled, border_color="\033[38;2;122;162;247m")  # HEX_BLUE
-    docs_panel = draw_fixed_panel(docs_title, docs_content, right_width, docs_height, styled=styled, border_color="\033[38;2;125;207;200m")  # HEX_CYAN
-    mascot_panel = draw_fixed_panel("BYTE", mascot_content, right_width, mascot_height, styled=styled, border_color="\033[38;2;224;175;104m")  # HEX_YELLOW
-    
+
+    # Dynamically resolve colors from active theme
+    try:
+        from cybershell.ui.theme import get_active_theme
+        theme = get_active_theme()
+        p_col = theme.fg_purple
+        b_col = theme.fg_blue
+        c_col = theme.fg_cyan
+        y_col = theme.fg_yellow
+    except Exception:
+        p_col = "\033[38;2;187;154;247m"
+        b_col = "\033[38;2;122;162;247m"
+        c_col = "\033[38;2;125;207;200m"
+        y_col = "\033[38;2;224;175;104m"
+
+    try:
+        from cybershell.ui.ambience import get_ambience_manager
+        ambience = get_ambience_manager()
+        r_enabled = ambience.rain_enabled
+        if r_enabled:
+            ambience.advance_rain(width=usable_width, height=height)
+    except Exception:
+        ambience = None
+        r_enabled = False
+
+    task_panel = draw_fixed_panel(
+        task_title, task_content, left_width, task_height,
+        styled=styled, border_color=p_col,
+        rain_enabled=r_enabled, rain_color=c_col,
+        row_offset=0,
+    )
+    term_panel = draw_fixed_panel(
+        term_title, sliced_term, left_width, term_height,
+        styled=styled, border_color=b_col,
+        rain_enabled=r_enabled, rain_color=c_col,
+        row_offset=task_height,
+    )
+    docs_panel = draw_fixed_panel(
+        docs_title, docs_content, right_width, docs_height,
+        styled=styled, border_color=c_col,
+        rain_enabled=r_enabled, rain_color=c_col,
+        row_offset=0,
+    )
+    mascot_panel = draw_fixed_panel(
+        "BYTE", mascot_content, right_width, mascot_height,
+        styled=styled, border_color=y_col,
+        rain_enabled=r_enabled, rain_color=c_col,
+        row_offset=docs_height,
+    )
+
     left_col = task_panel + term_panel
     right_col = docs_panel + mascot_panel
-    
-    return "\n".join(
-        l + (" " * gap) + r
-        for l, r in zip(left_col, right_col)
-    )
+
+    rows = []
+    for r_idx, (l, r) in enumerate(zip(left_col, right_col)):
+        if r_enabled and styled and ambience:
+            drop_ch = ambience.get_rain_char_at(col=left_width, row=r_idx, color=c_col)
+            if drop_ch:
+                gap_str = drop_ch + (" " * max(0, gap - 1))
+            else:
+                gap_str = " " * gap
+        else:
+            gap_str = " " * gap
+        rows.append(l + gap_str + r)
+
+    return "\n".join(rows)
 
 
 

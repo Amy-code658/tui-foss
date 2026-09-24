@@ -266,3 +266,54 @@ def format_boss_hp_bar(hp: int, max_hp: int = 100, bar_width: int = 16, styled: 
 def get_siren_banner(text: str = "", width: int = 76, styled: bool = False) -> str:
     """Alert banner (kept for backward compatibility)."""
     return ""
+
+
+FOSS_PENGUIN: str = """\
+           .---.
+          /     \\
+         | () () |
+          \\  ^  /
+         .-`---'-.
+        /  .---.  \\
+       |  /     \\  |
+       | |       | |
+       |  \\     /  |
+        \\  `---'  /
+        .' (___) '.
+       (____/ \\____)"""
+
+
+def get_foss_penguin(styled: bool = True) -> str:
+    """Return the iconic FOSS Tux penguin in ASCII art with light blue and yellow styling."""
+    if not styled:
+        return FOSS_PENGUIN
+
+    try:
+        from cybershell.ui.theme import get_active_theme
+        theme = get_active_theme()
+        c_blue = theme.fg_blue
+        c_yellow = theme.fg_yellow
+        c_white = theme.fg_white
+    except Exception:
+        c_blue = "\033[38;2;88;166;255m"
+        c_yellow = "\033[38;2;241;224;90m"
+        c_white = "\033[97m"
+
+    rst = RESET
+    bld = BOLD
+
+    lines = [
+        f"           {c_blue}.---.{rst}",
+        f"          {c_blue}/     \\{rst}",
+        f"         {c_blue}| {c_white}() (){c_blue} |{rst}",
+        f"          {c_blue}\\  {bld}{c_yellow}^{rst}{c_blue}  /{rst}",
+        f"         {c_blue}.-`---'-.{rst}",
+        f"        {c_blue}/  {c_white}.---.{c_blue}  \\{rst}",
+        f"       {c_blue}|  {c_white}/     \\{c_blue}  |{rst}",
+        f"       {c_blue}| {c_white}|       |{c_blue} |{rst}",
+        f"       {c_blue}|  {c_white}\\     /{c_blue}  |{rst}",
+        f"        {c_blue}\\  {c_white}`---'{c_blue}  /{rst}",
+        f"        {c_blue}.' {bld}{c_yellow}(___){rst}{c_blue} '.{rst}",
+        f"       {bld}{c_yellow}(____/ \\____){rst}",
+    ]
+    return "\n".join(lines)
