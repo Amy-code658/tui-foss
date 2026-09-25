@@ -94,6 +94,7 @@ def view_minigames_hub(
     player: PlayerStats,
     chmod_game: Optional[ChmodMinigame] = None,
     width: int = 70,
+    ui: Optional[object] = None,
 ) -> None:
     """Interactive loop for the Mini-Games Hub."""
     while True:
@@ -113,7 +114,10 @@ def view_minigames_hub(
             from cybershell.tools.minigames.chmod_decoder import play_chmod_decoder_interactive
             play_chmod_decoder_interactive(player, width=width)
         elif choice == "2":
-            score = play_snake_interactive()
+            if ui is not None and hasattr(ui, "play_snake"):
+                score = int(ui.play_snake() or 0)
+            else:
+                score = play_snake_interactive()
             if score > 0:
                 player.xp += score // 2
         elif choice == "3":

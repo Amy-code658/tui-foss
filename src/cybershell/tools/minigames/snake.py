@@ -6,12 +6,14 @@ Features:
 - Linux-themed food items: 'kernel', 'daemon', 'pipe', 'socket', 'packet'
 - Funny terminal-style game over messages (Kernel panic, Segfault, etc.)
 - Targets remaining tracker
-- Turn-based step and interactive play loop
+- Real-time play loop: the snake advances on its own clock and you steer with
+  hjkl / wasd / arrow keys. No Enter needed to advance turns.
 - Zero emojis
 """
 
 from typing import List, Optional, Tuple, Dict, Any
 import random
+import select
 import sys
 import time
 
@@ -108,7 +110,10 @@ class TerminalSnake:
             self.direction = new_dir
 
     def step(self, command: str = "") -> bool:
-        """Execute one game tick. Returns True if alive, False if game over."""
+        """Advance one tick, optionally applying a steering command first.
+
+        Returns True while the snake is alive, False once the game ends.
+        """
         if self.game_over:
             return False
 
@@ -122,6 +127,22 @@ class TerminalSnake:
         elif cmd in ("d", "l", "right"):
             self.change_direction("right")
 
+        return self._advance()
+
+    def turn(self, command: str) -> None:
+        """Change direction without advancing a tick (used by real-time play)."""
+        cmd = command.strip().lower()
+        if cmd in ("w", "k", "up"):
+            self.change_direction("up")
+        elif cmd in ("s", "j", "down"):
+            self.change_direction("down")
+        elif cmd in ("a", "h", "left"):
+            self.change_direction("left")
+        elif cmd in ("d", "l", "right"):
+            self.change_direction("right")
+
+    def _advance(self) -> bool:
+        """Move the snake one cell in the current direction."""
         head_x, head_y = self.snake[0]
         dx, dy = 0, 0
         if self.direction == "up":
@@ -141,8 +162,10 @@ class TerminalSnake:
             self.game_over_reason = "Segmentation fault: Hit mainframe boundary wall."
             return False
 
-        # Check self collision
-        if new_head in self.snake:
+        # Check self collision (the tail cell frees up unless we are growing)
+        will_grow = new_head == self.food_pos
+        body = self.snake if will_grow else self.snake[:-1]
+        if new_head in body:
             self.game_over = True
             self.game_over_reason = "Fatal: Snake collided with own memory segment."
             return False
@@ -150,12 +173,12 @@ class TerminalSnake:
         self.snake.insert(0, new_head)
 
         # Check food eaten
-        if new_head == self.food_pos:
+        if will_grow:
             points = self.food.get("points", 10) if self.food else 10
             self.score += points
             if self.score > self.high_score:
                 self.high_score = self.score
-            
+
             if self.targets_remaining > 0:
                 self.targets_remaining -= 1
                 if self.targets_remaining == 0:
@@ -217,7 +240,7 @@ class TerminalSnake:
         lines.append(f"{FG_PURPLE}{bot_border}{RESET}" if styled else bot_border)
 
         # Controls hint
-        controls = "Controls: [w/a/s/d] or [h/j/k/l] to turn | 'q' to quit"
+        controls = "Steer: [h/j/k/l] or [w/a/s/d] or arrows | 'q' to quit"
         lines.append(f"{DIM}{controls}{RESET}" if styled else controls)
 
         if self.game_over:
@@ -230,33 +253,73 @@ class TerminalSnake:
 
 
 def play_snake_interactive() -> int:
-    """Run an interactive turn-based session of Terminal Snake."""
+    """Run a real-time session of Terminal Snake.
+
+    The snake advances on its own clock; hjkl / wasd / arrow keys steer it and
+    'q' quits. No Enter is required to advance a turn.
+    """
     game = TerminalSnake(width=24, height=12, target_goals=8)
-    
+    tick = 0.16  # seconds per step
+    interactive = sys.stdin.isatty()
+
+    def read_key() -> str:
+        """Read one steering key without blocking. Returns '' when none pending."""
+        if not interactive:
+            return ""
+        try:
+            ready, _, _ = select.select([sys.stdin], [], [], 0)
+        except (OSError, ValueError):
+            return ""
+        if not ready:
+            return ""
+        try:
+            return sys.stdin.read(1)
+        except (OSError, ValueError):
+            return ""
+
     while not game.game_over:
         sys.stdout.write("\033[H\033[J")
         sys.stdout.write(game.render(styled=True) + "\n")
-        sys.stdout.write("Move [w/a/s/d, enter to advance]: ")
+        sys.stdout.write("Steer [h/j/k/l or w/a/s/d, arrows] - q to quit: ")
         sys.stdout.flush()
 
-        try:
-            cmd = input().strip()
-        except (KeyboardInterrupt, EOFError):
+        key = read_key()
+        if key.lower() in ("q", "Q"):
             break
+        if key in ("\x1b",):
+            # Possible arrow escape sequence: read the remaining bytes.
+            seq = ""
+            for _ in range(2):
+                try:
+                    ready, _, _ = select.select([sys.stdin], [], [], 0.001)
+                except (OSError, ValueError):
+                    break
+                if not ready:
+                    break
+                try:
+                    seq += sys.stdin.read(1)
+                except (OSError, ValueError):
+                    break
+            key = {"[A": "k", "[B": "j", "[C": "l", "[D": "h"}.get(seq, "")
 
-        if cmd.lower() in ("q", "quit", "exit"):
-            break
+        if key:
+            game.turn(key)
 
-        game.step(cmd)
+        # Advance on the game clock, regardless of whether a key arrived.
+        deadline = time.monotonic() + tick
+        while time.monotonic() < deadline and not game.game_over:
+            time.sleep(0.01)
+        game.step("")
 
     # Final screen
     sys.stdout.write("\033[H\033[J")
     sys.stdout.write(game.render(styled=True) + "\n")
-    sys.stdout.write("\nPress Enter to return...")
-    sys.stdout.flush()
-    try:
-        input()
-    except (KeyboardInterrupt, EOFError):
-        pass
+    if interactive:
+        sys.stdout.write("\nPress Enter to return...")
+        sys.stdout.flush()
+        try:
+            input()
+        except (KeyboardInterrupt, EOFError):
+            pass
 
     return game.score
