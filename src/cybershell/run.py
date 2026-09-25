@@ -691,10 +691,19 @@ def explain_command(
 # PERSONALIZED ONBOARDING & OPENING HERO SCREEN
 # =============================================================================
 
-def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer") -> str:
+def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer", ui: Optional[Any] = None) -> str:
     """Personalized onboarding card asking user's name with clean web-app aesthetics."""
     if not sys.stdin.isatty():
         return current_name if current_name else "Explorer"
+
+    if ui is not None:
+        ui.show_onboarding(current_name)
+        try:
+            raw_name = input().strip()
+        except (KeyboardInterrupt, EOFError):
+            return current_name if current_name else "Explorer"
+        clean_name = "".join(c for c in raw_name if c.isalnum() or c in ("-", "_", " ")).strip()
+        return (clean_name or current_name or "Explorer")[:16]
 
     term_w, term_h = terminal_size()
     term_w = max(40, width)
@@ -1254,6 +1263,7 @@ def interactive_game_loop(
     all_quests: Optional[Dict[int, Quest]] = None,
     app: Optional[RPGApp] = None,
     cadet_mode: bool = True,
+    ui: Optional[Any] = None,
 ) -> None:
     """Interactive adventure terminal loop with compact rounded HUD."""
     if player is None:
@@ -1294,7 +1304,8 @@ def interactive_game_loop(
     box_w = min(init_w - 4, 68)
 
     # Initial logs
-    ScreenTransition.wipe_screen(delay=0.005)
+    if ui is None:
+        ScreenTransition.wipe_screen(delay=0.005)
     if player.current_sector == 0 and not quest.is_completed:
         terminal_logs: List[str] = [
             f"{GREEN}[+] Level 1: Look Around — type a command or pick A/B/C/D{RESET}",
@@ -1450,10 +1461,11 @@ def interactive_game_loop(
 
         footer = draw_control_footer(screen_type="terminal", width=width, styled=True)
 
-        sys.stdout.write("\033[H\033[J")
-        sys.stdout.write(layout + "\n")
-        sys.stdout.write(pad_to_width(footer, usable_w, align="center") + "\n")
-        sys.stdout.flush()
+        if ui is None:
+            sys.stdout.write("\033[H\033[J")
+            sys.stdout.write(layout + "\n")
+            sys.stdout.write(pad_to_width(footer, usable_w, align="center") + "\n")
+            sys.stdout.flush()
 
         # Calculate exact row and col of the active prompt inside the TERMINAL pane
         needed_task_height = len(task_content) + 3
@@ -1466,8 +1478,24 @@ def interactive_game_loop(
         prompt_row = task_height + 3 + prompt_idx
         prompt_col = 3 + visual_len(active_prompt)
 
+        if ui is not None:
+            ui.show_lesson(
+                player=player,
+                quest=quest,
+                active_obj=active_obj,
+                terminal_logs=terminal_logs,
+                docs_content=docs_content,
+                pet=pet,
+                completed_count=completed_count,
+                total_challenges=total_challenges,
+                pct_prog=pct_prog,
+                cwd=cwd_short,
+                theme=theme,
+                vfs=vfs,
+            )
+
         try:
-            if sys.stdin.isatty():
+            if ui is None and sys.stdin.isatty():
                 sys.stdout.write(f"\033[{prompt_row};{prompt_col}H")
                 sys.stdout.flush()
                 user_input = input("").strip()
@@ -1827,14 +1855,14 @@ def interactive_game_loop(
 # MAIN MENU CONTROLLER LOOP
 # =============================================================================
 
-def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
+def main_menu_loop(character_name: str = "Byte", start_sector: int = 0, ui: Optional[Any] = None) -> None:
     """Main menu loop with navigation, profile switching, and first-time field manual."""
     width, _ = terminal_size()
     last_user = get_last_saved_username() or (character_name if character_name != "Byte" else "Explorer")
 
     # Prompt user on launch to confirm active explorer or switch to a new user
     if sys.stdin.isatty():
-        active_user = prompt_player_onboarding(width=width, current_name=last_user)
+        active_user = prompt_player_onboarding(width=width, current_name=last_user, ui=ui)
     else:
         active_user = character_name or "Explorer"
 
@@ -1875,11 +1903,14 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
             player.current_sector > 0 or player.xp > 0 or len(player.completed_sectors) > 0
         )
         width, height = terminal_size()
-        sys.stdout.write("\033[H\033[J")
-        top_margin = max(0, (height - 34) // 2)
-        if top_margin > 0:
-            sys.stdout.write("\n" * top_margin)
-        print(render_opening_screen(player, width, cadet_mode=cadet_mode, has_save=has_save))
+        if ui is None:
+            sys.stdout.write("\033[H\033[J")
+            top_margin = max(0, (height - 34) // 2)
+            if top_margin > 0:
+                sys.stdout.write("\n" * top_margin)
+            print(render_opening_screen(player, width, cadet_mode=cadet_mode, has_save=has_save))
+        else:
+            ui.show_home(player, has_save)
 
         max_option = 8 if has_save else 7
         card_w = min(max(44, width - 4), 74)
@@ -1887,7 +1918,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
         indent_str = " " * indent_len
         prompt_text = f"Choose an option [0-{max_option}, T] (or ESC to exit, default: 1): "
         try:
-            choice = input(f"{indent_str}{YELLOW}{prompt_text}{RESET}").strip()
+            choice = input(f"{indent_str}{YELLOW}{prompt_text}{RESET}" if ui is None else "").strip()
         except (KeyboardInterrupt, EOFError):
             print(f"\n{CYAN}See you next time! Session closed.{RESET}\n")
             break
@@ -1902,7 +1933,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
 
         # Switch active profile / user directly in menu
         if choice_lower in ("user", "profile", "switch", ":user", ":profile"):
-            p_name = prompt_player_onboarding(width, current_name=player.character_name)
+            p_name = prompt_player_onboarding(width, current_name=player.character_name, ui=ui)
             if p_name and p_name != player.character_name:
                 active_user = p_name
                 saved_data = load_saved_game(username=active_user)
@@ -1954,10 +1985,11 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                     all_quests=all_quests,
                     app=app,
                     cadet_mode=cadet_mode,
+                    ui=ui,
                 )
             elif choice_lower in ("2", "new", "reset", "n"):
                 delete_saved_game(username=player.character_name)
-                p_name = prompt_player_onboarding(width, current_name=player.character_name) if sys.stdin.isatty() else player.character_name
+                p_name = prompt_player_onboarding(width, current_name=player.character_name, ui=ui) if sys.stdin.isatty() else player.character_name
                 player = PlayerStats(
                     character_name=p_name,
                     hp=100,
@@ -1981,6 +2013,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                     all_quests=all_quests,
                     app=app,
                     cadet_mode=cadet_mode,
+                    ui=ui,
                 )
             elif choice_lower in ("3", "map", "m"):
                 view_map(app.mainframe, player, all_quests, width)
@@ -2015,6 +2048,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                     all_quests=all_quests,
                     app=app,
                     cadet_mode=cadet_mode,
+                    ui=ui,
                 )
             elif choice_lower in ("2", "map", "m"):
                 view_map(app.mainframe, player, all_quests, width)
@@ -2072,6 +2106,12 @@ def main() -> int:
 
     if args.demo:
         run_demo(args.name)
+        return 0
+
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        from cybershell.ui.textual_app import run_textual
+
+        run_textual(args.name, args.sector)
         return 0
 
     try:

@@ -24,7 +24,7 @@ Join your friendly guide **Byte** `(・ω・) 🌱` as you explore cozy director
 * **15 Finite Levels**: Complete a clear, structured progression from basic `pwd` to multi-stage pipelines and redirects.
 * **Progressive Hints**: Stuck? Ask `?` or `hint` for 3-tier clues (Concept ➔ Syntax ➔ Solution) with no penalties.
 * **Friendly Mascots**: Learn alongside Byte `(・ω・)`, Fern `(◕‿◕)`, Penny `(•ᴗ•)`, and Nova `(★ω★)`.
-* **Zero Third-Party Dependencies**: Runs purely on the Python standard library!
+* **Full-screen TUI**: Built with Textual for responsive panels, keyboard and mouse navigation, and theme-aware rendering.
 
 ---
 
@@ -53,8 +53,8 @@ Join your friendly guide **Byte** `(・ω・) 🌱` as you explore cozy director
 ## 🚀 Quick Start & Installation
 
 ### Requirements
-* **Python 3.8+** (Linux, macOS, or Windows)
-* No third-party packages required!
+* **Python 3.11+** (Linux, macOS, or Windows)
+* Textual is installed automatically by `uv run` or from `requirements.txt`.
 
 ### Option 1: Run via `uv` (Recommended)
 ```bash
