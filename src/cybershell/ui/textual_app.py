@@ -2,6 +2,14 @@
 
 The game engine remains synchronous and owns all game state.  This module adapts
 its existing input/output boundary to a full-screen, responsive Textual UI.
+
+Interaction model (live-first):
+
+* The docs pane filters as you type - no Enter required.
+* ``Ctrl+Space`` / ``Ctrl+P`` / ``:cmd`` opens a centered command palette that
+  fuzzy-matches live and runs the highlighted entry with Enter.
+* The shell prompt shows command/file matches live and Tab-completes them.
+* The home menu is navigable with the arrow keys.
 """
 
 from __future__ import annotations
@@ -9,20 +17,30 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import io
-import queue
 import posixpath
+import queue
 import re
 import threading
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any, Iterable, Optional
 
 from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
 from textual.theme import Theme as TextualTheme
-from textual.widgets import Button, Footer, Header, Input, ProgressBar, RichLog, Static
+from textual.widgets import Button, Footer, Header, Input, OptionList, ProgressBar, RichLog, Static
+from textual.widgets.option_list import Option
 
+from cybershell.ui.search import fuzzy_score, fuzzy_search_commands
 from cybershell.ui.theme import THEMES, Theme, get_active_theme
+
+# Commands / aliases that should open the palette rather than hit the shell.
+_COMMAND_TRIGGERS = {
+    ":cmd", ":menu", ":space", ":center", ":p", "cmd", "palette",
+    "ctrl+space", "ctrl-space", "ctrl space", "<c-space>", "^space",
+}
 
 
 class _OutputBridge(io.TextIOBase):
@@ -137,6 +155,136 @@ def _big_linux(theme: Theme) -> Text:
     return art
 
 
+@dataclass
+class _PaletteItem:
+    """One selectable row inside :class:`SearchPalette`."""
+
+    id: str
+    label: str
+    detail: str = ""
+    keywords: str = ""
+
+    def searchable(self) -> str:
+        return f"{self.label} {self.detail} {self.keywords}".strip()
+
+
+class SearchPalette(ModalScreen[Optional[str]]):
+    """Centered overlay that fuzzy-filters rows live as the user types."""
+
+    BINDINGS = [("escape", "dismiss_palette", "Close")]
+
+    CSS = """
+    SearchPalette { align: center middle; background: $background 60%; }
+    #palette-box {
+        width: 78;
+        max-width: 96%;
+        height: auto;
+        max-height: 90%;
+        background: $surface;
+        border: round $primary;
+        padding: 1 2;
+    }
+    #palette-title { color: $primary; text-style: bold; height: 1; }
+    #palette-input {
+        height: 1;
+        border: none;
+        border-left: thick $primary;
+        background: $panel;
+        padding: 0 1;
+        margin: 1 0;
+    }
+    #palette-input:focus { border: none; border-left: thick $primary; }
+    #palette-list { height: auto; max-height: 16; background: transparent; }
+    #palette-hint { color: $text-muted; height: 1; margin-top: 1; }
+    """
+
+    def __init__(
+        self,
+        title: str,
+        items: Iterable[_PaletteItem],
+        placeholder: str = "Search…",
+        hint: str = "Type to filter  ·  ↑/↓ choose  ·  Enter run  ·  Esc close",
+    ) -> None:
+        super().__init__()
+        self._title = title
+        self._items: list[_PaletteItem] = list(items)
+        self._placeholder = placeholder
+        self._hint = hint
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="palette-box"):
+            yield Static(self._title, id="palette-title")
+            yield Input(placeholder=self._placeholder, id="palette-input")
+            yield OptionList(id="palette-list")
+            yield Static(self._hint, id="palette-hint")
+
+    def on_mount(self) -> None:
+        self._refresh("")
+        self.query_one("#palette-input", Input).focus()
+
+    def _matches(self, query: str) -> list[_PaletteItem]:
+        query = (query or "").strip()
+        if not query:
+            return self._items
+        scored: list[tuple[int, str, _PaletteItem]] = []
+        for item in self._items:
+            matched, score = fuzzy_score(query, item.searchable())
+            if matched:
+                scored.append((score, item.label, item))
+        scored.sort(key=lambda entry: (-entry[0], entry[1]))
+        return [item for _, _, item in scored]
+
+    def _refresh(self, query: str) -> None:
+        listing = self.query_one("#palette-list", OptionList)
+        listing.clear_options()
+        matches = self._matches(query)
+        if not matches:
+            listing.add_option(Option("  No matching command", id="__none__", disabled=True))
+            return
+        for item in matches:
+            label = f"{item.label}   {item.detail}" if item.detail else item.label
+            listing.add_option(Option(label, id=item.id))
+        listing.highlighted = 0
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "palette-input":
+            self._refresh(event.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "palette-input":
+            self._choose_highlighted()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        event.stop()
+        self.dismiss(event.option.id)
+
+    def on_key(self, event: events.Key) -> None:
+        listing = self.query_one("#palette-list", OptionList)
+        if event.key == "up":
+            listing.action_cursor_up()
+        elif event.key == "down":
+            listing.action_cursor_down()
+        elif event.key == "pageup":
+            for _ in range(5):
+                listing.action_cursor_up()
+        elif event.key == "pagedown":
+            for _ in range(5):
+                listing.action_cursor_down()
+        else:
+            return
+        event.stop()
+        event.prevent_default()
+
+    def _choose_highlighted(self) -> None:
+        option = self.query_one("#palette-list", OptionList).highlighted_option
+        if option is None or option.id in (None, "__none__"):
+            return
+        self.dismiss(str(option.id))
+
+    def action_dismiss_palette(self) -> None:
+        self.dismiss(None)
+
+
 class CyberShellTUI(App[None]):
     """Full-screen Textual front end backed by the existing game loop."""
 
@@ -162,10 +310,11 @@ class CyberShellTUI(App[None]):
     #home-lower { height: auto; margin-top: 1; }
     #home-menu { width: 1fr; height: auto; border: round $border; background: $surface; padding: 1 2; }
     #menu-options { height: auto; layout: grid; grid-size: 2; grid-columns: 1fr 1fr; grid-gutter: 0 1; }
-    #menu-options Button { width: 1fr; min-width: 18; margin: 0; border: none; background: $panel; color: $foreground; }
+    #menu-options Button { width: 1fr; min-width: 18; margin: 0; border: none; background: $panel; color: $foreground; overflow: hidden; }
     #menu-options Button:hover { background: $primary-muted; color: $foreground; }
     #menu-options Button.-primary { background: $primary; color: $background; text-style: bold; }
-    #home-side { width: 32; height: auto; margin-left: 1; border: round $border; background: $surface; padding: 1 2; }
+    #menu-options Button.-selected { background: $success; color: $background; text-style: bold; }
+    #home-side { width: 32; height: auto; margin-left: 1; border: round $border; background: $surface; padding: 1 2; overflow: hidden; }
     #home-side Static { height: auto; color: $text-muted; }
     #home-side Button { width: 1fr; height: 1; min-height: 1; border: none; margin-top: 1; background: $panel; color: $foreground; }
     #home-input-row { height: 3; margin-top: 1; }
@@ -180,12 +329,16 @@ class CyberShellTUI(App[None]):
     #terminal-card { width: 2fr; }
     #docs-card { width: 1fr; margin-left: 1; }
     .section-head { height: 2; color: $primary; text-style: bold; content-align: left middle; }
-    #terminal-log { height: 1fr; border: none; background: $panel; padding: 0; scrollbar-color: $border; }
-    #command-row { height: 3; margin: 0 0 1 0; }
-    #shell-mark { width: 3; color: $success; content-align: center middle; }
-    #command-input { width: 1fr; border: round $border; background: $surface; }
+    #terminal-log { width: 1fr; height: 1fr; border: none; background: $panel; padding: 0; scrollbar-color: $border; }
+    #command-row { height: 1; margin: 0; }
+    #shell-mark { width: auto; min-width: 2; color: $success; text-style: bold; padding: 0 1 0 0; }
+    #command-input { width: 1fr; height: 1; border: none; background: $panel; padding: 0; }
+    #command-input:focus { border: none; background: $panel; }
+    #command-input > .input--placeholder { color: $text-muted; }
+    #command-input > .input--cursor { background: $primary; color: $background; }
     #docs-search { height: 3; border: round $border; background: $surface; }
-    #docs-content { height: 1fr; overflow-y: auto; color: $foreground; }
+    #docs-scroll { height: 1fr; overflow-y: auto; }
+    #docs-content { width: 100%; color: $foreground; }
     #pet-card { height: 12; border-top: solid $border; padding-top: 1; margin-top: 1; }
     #pet-card.hidden-pet { display: none; }
     #pet-art { width: 18; content-align: center middle; }
@@ -271,6 +424,16 @@ class CyberShellTUI(App[None]):
         self._stopping = False
         self._worker_error: Optional[Exception] = None
 
+        # Live docs search state.
+        self._codex: Any = None
+        self._executable_cmds: Optional[set[str]] = None
+        self._docs_query = ""
+        self._default_docs = Text("")
+
+        # Home menu keyboard navigation state.
+        self._home_menu_values: list[str] = []
+        self._home_menu_index = 0
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Vertical(id="frame"):
@@ -314,8 +477,9 @@ class CyberShellTUI(App[None]):
                             yield Input(placeholder="Type a Linux command…", id="command-input")
                     with Vertical(id="docs-card"):
                         yield Static("⌕  COMMAND GUIDE", classes="section-head")
-                        yield Input(placeholder="Search a command or task…", id="docs-search")
-                        yield Static("", id="docs-content")
+                        yield Input(placeholder="Search a command or task… (live)", id="docs-search")
+                        with VerticalScroll(id="docs-scroll"):
+                            yield Static("", id="docs-content")
                         with Horizontal(id="pet-card"):
                             yield Static(_pixel_penguin(self._theme), id="pet-art")
                             yield Static("Need a nudge?\nType `man command` for a guide, or `hint` for a clue.", id="pet-copy")
@@ -388,6 +552,7 @@ class CyberShellTUI(App[None]):
         self.query_one("#intro", Static).update(f"Press Enter to continue as {current_name}, or type a name.")
         self.query_one("#home-description", Static).update("Your name is saved with your learning progress.")
         await self.query_one("#menu-options", Vertical).remove_children()
+        self._home_menu_values = []
         self.query_one("#home-input", Input).placeholder = f"Name (Enter keeps {current_name})"
         self.query_one("#home-prompt", Static).update("›  YOUR NAME")
         self.query_one("#home-input", Input).focus()
@@ -426,8 +591,34 @@ class CyberShellTUI(App[None]):
             classes = "-primary" if variant == "primary" else ""
             button = Button(f"{value}   {label}", id=f"menu-{value}", classes=classes)
             await menu.mount(button)
+        self._home_menu_values = [value for value, _, _ in labels]
+        self._home_menu_index = 0
+        self._refresh_home_selection()
         self.query_one("#home-input", Input).focus()
         self._input_mode = "home"
+
+    # -- Home menu keyboard navigation -------------------------------------
+
+    def _refresh_home_selection(self) -> None:
+        for index, value in enumerate(self._home_menu_values):
+            try:
+                button = self.query_one(f"#menu-{value}", Button)
+            except Exception:
+                continue
+            button.set_class(index == self._home_menu_index, "-selected")
+
+    def _move_home_selection(self, delta: int) -> None:
+        total = len(self._home_menu_values)
+        if total == 0:
+            return
+        self._home_menu_index = (self._home_menu_index + delta) % total
+        self._refresh_home_selection()
+
+    def _selected_home_value(self) -> str:
+        if not self._home_menu_values:
+            return ""
+        index = min(self._home_menu_index, len(self._home_menu_values) - 1)
+        return self._home_menu_values[index]
 
     def show_lesson(self, **state: Any) -> None:
         self.call_from_thread(self._show_lesson, state)
@@ -464,9 +655,11 @@ class CyberShellTUI(App[None]):
         logs.clear()
         for line in state.get("terminal_logs", []):
             logs.write(Text.from_ansi(str(line)))
-        self.query_one("#docs-content", Static).update(
-            Text.from_ansi("\n".join(state.get("docs_content", [])))
-        )
+        self._default_docs = Text.from_ansi("\n".join(state.get("docs_content", [])))
+        if self._docs_query:
+            self._render_docs(self._docs_query)
+        else:
+            self.query_one("#docs-content", Static).update(self._default_docs)
         pet = state.get("pet")
         self.query_one("#pet-card").set_class(
             pet is None or not getattr(pet, "enabled", True), "hidden-pet"
@@ -535,16 +728,135 @@ class CyberShellTUI(App[None]):
         self.query_one("#hero-art", Static).update(_pixel_penguin(theme))
         self.query_one("#wordmark-large", Static).update(_big_linux(theme))
 
+    # -- Live docs search --------------------------------------------------
+
+    def _docs_catalog(self) -> list[dict[str, Any]]:
+        if self._codex is None:
+            from cybershell.engine.interpreter import Interpreter
+            from cybershell.tools.codex import Codex
+
+            self._codex = Codex()
+            self._executable_cmds = set(Interpreter().commands.command_names) | {"tree", "clear"}
+        catalog = self._codex.list_commands()
+        if self._executable_cmds:
+            return [cmd for cmd in catalog if cmd.get("name", "") in self._executable_cmds]
+        return catalog
+
+    def _docs_width(self) -> int:
+        try:
+            return max(20, self.query_one("#docs-card").size.width - 4)
+        except Exception:
+            return 40
+
+    def _render_docs(self, query: str) -> None:
+        query = query.strip()
+        self._docs_query = query
+        content = Text()
+        width = self._docs_width()
+        if not query:
+            self.query_one("#docs-content", Static).update(self._default_docs)
+            return
+        matches = fuzzy_search_commands(query, self._docs_catalog(), limit=40)
+        content.append(f"live: '{query}'  ({len(matches)})\n", style=f"bold {self._theme.yellow}")
+        if not matches:
+            content.append("No matching commands. Try another word.", style=self._theme.red)
+        for cmd in matches[:24]:
+            name = str(cmd.get("name", ""))
+            desc = str(cmd.get("purpose") or cmd.get("description", ""))
+            avail = max(8, width - 9)
+            if len(desc) > avail:
+                desc = desc[: max(0, avail - 1)] + "…"
+            content.append(f"{name:<7}", style=f"bold {self._theme.cyan}")
+            content.append(f" {desc}\n", style=self._theme.text_muted)
+        self.query_one("#docs-content", Static).update(content)
+
+    def _on_docs_changed(self, value: str) -> None:
+        self._render_docs(value)
+
+    # -- Command palette ---------------------------------------------------
+
+    def _command_items(self) -> list[_PaletteItem]:
+        from cybershell.ui.command_center import PALETTE_ACTIONS
+
+        return [
+            _PaletteItem(
+                id=action["id"],
+                label=action["title"],
+                detail=action.get("detail", ""),
+                keywords=f"{action.get('id', '')} {action.get('key', '')}",
+            )
+            for action in PALETTE_ACTIONS
+        ]
+
+    def _open_command_palette(self) -> None:
+        if isinstance(self.screen, SearchPalette):
+            return
+        self.push_screen(
+            SearchPalette("COMMAND PALETTE", self._command_items(), placeholder="Search commands…"),
+            self._handle_palette_action,
+        )
+
+    def _handle_palette_action(self, action: Optional[str]) -> None:
+        if not action:
+            return
+        if action == "search_docs":
+            if self._input_mode == "lesson" and self.size.width >= 65:
+                self.query_one("#docs-search", Input).focus()
+            else:
+                self.query_one("#command-input", Input).focus()
+            return
+        if action == "open_manual":
+            entry = self.query_one("#command-input", Input)
+            entry.value = "man "
+            entry.cursor_position = len(entry.value)
+            entry.focus()
+            return
+        mapping = {
+            "choose_challenge": "map",
+            "view_progress": ":progress",
+            "open_minigames": ":games",
+            "reset_challenge": ":reset",
+            "toggle_pet": ":pet",
+            "chmod_decoder": ":chmod",
+            "theme_selector": ":theme",
+            "settings": ":settings",
+        }
+        command = mapping.get(action)
+        if command:
+            self._send_to_shell(command)
+
+    def _send_to_shell(self, command: str) -> None:
+        self._show_view("lesson")
+        entry = self.query_one("#command-input", Input)
+        entry.focus()
+        self.input_queue.put(command)
+        self._log_shell(f"❯ {command}")
+
+    def _log_shell(self, message: str, title: bool = False) -> None:
+        style = f"bold {self._theme.cyan}" if title else self._theme.text
+        if self._input_mode == "lesson":
+            self.query_one("#terminal-log", RichLog).write(Text(message, style=style))
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "docs-search":
+            self._on_docs_changed(event.value)
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "docs-search":
+            # The filter is already live; just move focus back to the shell.
+            self.query_one("#command-input", Input).focus()
+            return
         value = event.value
         event.input.value = ""
         self._history_index = None
-        if event.input.id == "docs-search":
-            self.input_queue.put(f"search {value.strip()}" if value.strip() else "search")
-            self.query_one("#command-input", Input).focus()
-            return
-        if event.input.id == "command-input" and value.strip():
-            self._history.append(value)
+        if event.input.id == "command-input":
+            if value.strip():
+                self._history.append(value)
+            if value.strip().lower() in _COMMAND_TRIGGERS:
+                self._open_command_palette()
+                return
+        elif event.input.id == "home-input" and not value.strip():
+            value = self._selected_home_value()
         self.input_queue.put(value)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -552,6 +864,17 @@ class CyberShellTUI(App[None]):
             self.input_queue.put(event.button.id.removeprefix("menu-"))
 
     def on_key(self, event: events.Key) -> None:
+        if self._input_mode == "home" and self._home_menu_values:
+            if event.key in ("down", "right"):
+                self._move_home_selection(1)
+                event.stop()
+                event.prevent_default()
+                return
+            if event.key in ("up", "left"):
+                self._move_home_selection(-1)
+                event.stop()
+                event.prevent_default()
+                return
         if not isinstance(self.focused, Input) or self.focused.id != "command-input":
             return
         if event.key == "tab":
@@ -617,8 +940,10 @@ class CyberShellTUI(App[None]):
             self.query_one("#docs-search", Input).focus()
 
     def action_open_commands(self) -> None:
+        if isinstance(self.screen, SearchPalette):
+            return
         if self._input_mode == "lesson":
-            self.input_queue.put(":cmd")
+            self._open_command_palette()
 
     async def action_quit(self) -> None:
         self._stopping = True
@@ -628,10 +953,13 @@ class CyberShellTUI(App[None]):
         self.exit()
 
     def action_send_escape(self) -> None:
+        if isinstance(self.screen, SearchPalette):
+            return
         if self._input_mode == "lesson" and getattr(self.focused, "id", None) == "docs-search":
             search = self.query_one("#docs-search", Input)
             if search.value:
                 search.value = ""
+                self._render_docs("")
             else:
                 self.query_one("#command-input", Input).focus()
             return

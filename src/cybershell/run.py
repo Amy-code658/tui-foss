@@ -1560,6 +1560,11 @@ def interactive_game_loop(
             terminal_logs.append(f"{CYAN}[+] Terminal Pet Byte is now {status_txt}.{RESET}")
             continue
 
+        if input_lower in (":settings", ":setting", "settings", "diagnostics", "diag"):
+            from cybershell.ui.command_center import run_settings_view
+            run_settings_view(player, width=width)
+            continue
+
         if input_lower in (":chmod", ":perm", ":decoder"):
             from cybershell.tools.minigames.chmod_decoder import play_chmod_decoder_interactive
             play_chmod_decoder_interactive(player, width=width)
