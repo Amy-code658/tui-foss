@@ -155,6 +155,145 @@ def _big_linux(theme: Theme) -> Text:
     return art
 
 
+class TerminalInput(Static):
+    """A single scrollable terminal surface: output plus the live prompt line.
+
+    Unlike a separate ``Input`` widget (which is always pinned to its own row),
+    this keeps the editable prompt in the same text stream as the output, so it
+    scrolls away naturally like a real terminal.
+    """
+
+    can_focus = True
+
+    def __init__(self, prompt: str = "❯", **kwargs: Any) -> None:
+        super().__init__("", **kwargs)
+        self._lines: list[Text] = []
+        self._buffer = ""
+        self._cursor = 0
+        self._prompt = prompt
+        self._prompt_style = "green"
+        self._history: list[str] = []
+        self._history_index: Optional[int] = None
+        # Wired by the host app once the widget is mounted.
+        self.on_submit: Optional[Any] = None
+        self.on_complete: Optional[Any] = None
+
+    # -- output ------------------------------------------------------------
+
+    def add_line(self, line: Any) -> None:
+        """Append an output line (Text or str) above the live prompt."""
+        self._lines.append(line if isinstance(line, Text) else Text.from_ansi(str(line)))
+        self._redraw()
+
+    def clear_output(self) -> None:
+        self._lines.clear()
+        self._redraw()
+
+    def set_prompt(self, prompt: str) -> None:
+        self._prompt = prompt
+        self._redraw()
+
+    # -- editable prompt ---------------------------------------------------
+
+    @property
+    def value(self) -> str:
+        return self._buffer
+
+    def reset_value(self) -> None:
+        self._buffer = ""
+        self._cursor = 0
+        self._history_index = None
+        self._redraw()
+
+    def _redraw(self) -> None:
+        text = Text()
+        for line in self._lines:
+            text.append_text(line)
+            text.append("\n")
+        text.append_text(self._render_input())
+        text.append("\n")
+        self.update(text)
+
+    def _render_input(self) -> Text:
+        rendered = Text()
+        rendered.append(f"{self._prompt} ", style=f"bold {self._prompt_style}")
+        value = self._buffer
+        cursor = min(self._cursor, len(value))
+        rendered.append(value[:cursor], style=self._prompt_style)
+        rendered.append(value[cursor: cursor + 1] or " ", style="reverse")
+        rendered.append(value[cursor + 1:], style=self._prompt_style)
+        return rendered
+
+    # -- key handling ------------------------------------------------------
+
+    def on_key(self, event: events.Key) -> None:
+        key = event.key
+        if key == "enter":
+            command = self._buffer
+            if command.strip():
+                self._history.append(command)
+            self._history_index = None
+            self._submit(command)
+        elif key == "backspace":
+            if self._cursor > 0:
+                self._buffer = self._buffer[: self._cursor - 1] + self._buffer[self._cursor:]
+                self._cursor -= 1
+        elif key == "delete":
+            self._buffer = self._buffer[: self._cursor] + self._buffer[self._cursor + 1:]
+        elif key == "left":
+            self._cursor = max(0, self._cursor - 1)
+        elif key == "right":
+            self._cursor = min(len(self._buffer), self._cursor + 1)
+        elif key == "home" or key == "ctrl+a":
+            self._cursor = 0
+        elif key == "end" or key == "ctrl+e":
+            self._cursor = len(self._buffer)
+        elif key == "up":
+            self._history_move(-1)
+        elif key == "down":
+            self._history_move(1)
+        elif key == "tab":
+            self._complete()
+        elif key == "space":
+            self._insert(" ")
+        elif len(key) == 1 and key.isprintable():
+            self._insert(key)
+        else:
+            return
+        self._redraw()
+        event.stop()
+        event.prevent_default()
+
+    def _insert(self, char: str) -> None:
+        self._buffer = self._buffer[: self._cursor] + char + self._buffer[self._cursor:]
+        self._cursor += 1
+
+    def _history_move(self, delta: int) -> None:
+        if not self._history:
+            return
+        if self._history_index is None:
+            if delta < 0:
+                self._history_index = len(self._history) - 1
+            else:
+                return
+        else:
+            self._history_index += delta
+            self._history_index = max(0, min(self._history_index, len(self._history) - 1))
+        self._buffer = self._history[self._history_index]
+        self._cursor = len(self._buffer)
+
+    # -- overridable hooks -------------------------------------------------
+
+    def _submit(self, command: str) -> None:
+        if self.on_submit is not None:
+            self.on_submit(command)
+        self.reset_value()
+
+    def _complete(self) -> None:
+        if self.on_complete is not None:
+            self.on_complete()
+
+
 @dataclass
 class _PaletteItem:
     """One selectable row inside :class:`SearchPalette`."""
@@ -285,6 +424,103 @@ class SearchPalette(ModalScreen[Optional[str]]):
         self.dismiss(None)
 
 
+class KeyboardGame(ModalScreen[Optional[int]]):
+    """Play a turn/frame based minigame with real keyboard input.
+
+    The game runs on its own timer and only the board widget is refreshed, so
+    there is no full-screen rerender per tick. Returns the final score.
+    """
+
+    BINDINGS = [("q", "game_quit", "Quit"), ("escape", "game_quit", "Quit")]
+
+    CSS = """
+    KeyboardGame { align: center middle; background: $background 70%; }
+    #game-box {
+        width: auto;
+        max-width: 96%;
+        height: auto;
+        max-height: 95%;
+        background: $surface;
+        border: round $primary;
+        padding: 1 2;
+    }
+    #game-title { color: $primary; text-style: bold; height: 1; }
+    #game-board { height: auto; width: auto; margin: 1 0; }
+    #game-status { color: $text-muted; height: 1; }
+    """
+
+    TICK = 0.16
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._timer = None
+
+    def compose(self) -> ComposeResult:
+        from cybershell.tools.minigames.snake import TerminalSnake
+
+        self.game = TerminalSnake(width=24, height=12, target_goals=8)
+        with Vertical(id="game-box"):
+            yield Static("TERMINAL SNAKE", id="game-title")
+            yield Static(self._board_text(), id="game-board")
+            yield Static("Steer h/j/k/l or w/a/s/d or arrows  ·  q quit", id="game-status")
+
+    def on_mount(self) -> None:
+        self._timer = self.set_interval(self.TICK, self._tick)
+
+    def _board_text(self) -> Text:
+        # Reuse the game's own ASCII board but strip ANSI; colour via Rich.
+        raw = self.game.render(styled=False)
+        return Text(raw, style=self._theme_text())
+
+    def _theme_text(self) -> str:
+        try:
+            return self.app._theme.text  # type: ignore[attr-defined]
+        except Exception:
+            return "white"
+
+    def _refresh_board(self) -> None:
+        self.query_one("#game-board", Static).update(self._board_text())
+
+    def _tick(self) -> None:
+        if self.game.game_over:
+            return
+        alive = self.game.step("")
+        self._refresh_board()
+        if not alive:
+            self._finish()
+
+    def on_key(self, event: events.Key) -> None:
+        if self.game.game_over:
+            return
+        if event.key in ("up", "k", "w"):
+            self.game.turn("k")
+        elif event.key in ("down", "j", "s"):
+            self.game.turn("j")
+        elif event.key in ("left", "h", "a"):
+            self.game.turn("h")
+        elif event.key in ("right", "l", "d"):
+            self.game.turn("l")
+        else:
+            return
+        event.stop()
+        event.prevent_default()
+
+    def _finish(self) -> None:
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+        self._refresh_board()
+        self.query_one("#game-status", Static).update(
+            f"{self.game.game_over_reason or 'Game over'}  ·  score {self.game.score}  ·  press q"
+        )
+
+    def action_game_quit(self) -> None:
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+        self.dismiss(self.game.score)
+
+
 class CyberShellTUI(App[None]):
     """Full-screen Textual front end backed by the existing game loop."""
 
@@ -329,13 +565,8 @@ class CyberShellTUI(App[None]):
     #terminal-card { width: 2fr; }
     #docs-card { width: 1fr; margin-left: 1; }
     .section-head { height: 2; color: $primary; text-style: bold; content-align: left middle; }
-    #terminal-log { width: 1fr; height: 1fr; border: none; background: $panel; padding: 0; scrollbar-color: $border; }
-    #command-row { height: 1; margin: 0; }
-    #shell-mark { width: auto; min-width: 2; color: $success; text-style: bold; padding: 0 1 0 0; }
-    #command-input { width: 1fr; height: 1; border: none; background: $panel; padding: 0; }
-    #command-input:focus { border: none; background: $panel; }
-    #command-input > .input--placeholder { color: $text-muted; }
-    #command-input > .input--cursor { background: $primary; color: $background; }
+    #terminal-input { width: 1fr; height: 1fr; color: $foreground; padding: 0; }
+    #terminal-input:focus { background: $panel; }
     #docs-search { height: 3; border: round $border; background: $surface; }
     #docs-scroll { height: 1fr; overflow-y: auto; }
     #docs-content { width: 100%; color: $foreground; }
@@ -417,8 +648,6 @@ class CyberShellTUI(App[None]):
                     },
                 )
             )
-        self._history: list[str] = []
-        self._history_index: Optional[int] = None
         self._vfs: Any = None
         self._capture = _OutputBridge(self)
         self._stopping = False
@@ -433,6 +662,9 @@ class CyberShellTUI(App[None]):
         # Home menu keyboard navigation state.
         self._home_menu_values: list[str] = []
         self._home_menu_index = 0
+
+        # Shell prompt text mirrored from the engine.
+        self._shell_prompt = "❯"
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -471,10 +703,7 @@ class CyberShellTUI(App[None]):
                 with Horizontal(id="work-area"):
                     with Vertical(id="terminal-card"):
                         yield Static("⌁  SHELL  /  LIVE WORKSPACE", id="terminal-head", classes="section-head")
-                        yield RichLog(id="terminal-log", wrap=True, markup=False, highlight=False, auto_scroll=True)
-                        with Horizontal(id="command-row"):
-                            yield Static("❯", id="shell-mark")
-                            yield Input(placeholder="Type a Linux command…", id="command-input")
+                        yield TerminalInput(id="terminal-input")
                     with Vertical(id="docs-card"):
                         yield Static("⌕  COMMAND GUIDE", classes="section-head")
                         yield Input(placeholder="Search a command or task… (live)", id="docs-search")
@@ -494,6 +723,9 @@ class CyberShellTUI(App[None]):
     def on_mount(self) -> None:
         self._show_view("home")
         self._apply_theme(self._theme)
+        terminal = self.query_one("#terminal-input", TerminalInput)
+        terminal.on_submit = self._on_terminal_submit
+        terminal.on_complete = self._on_terminal_complete
         self.query_one("#home-input", Input).focus()
         self._update_breakpoints(self.size.width, self.size.height)
         self._game_thread = threading.Thread(target=self._run_existing_game, daemon=True)
@@ -651,10 +883,12 @@ class CyberShellTUI(App[None]):
         self._vfs = state.get("vfs")
         progress = self.query_one("#progress-bar", ProgressBar)
         progress.update(total=max(1, total), progress=completed)
-        logs = self.query_one("#terminal-log", RichLog)
-        logs.clear()
+        terminal = self.query_one("#terminal-input", TerminalInput)
+        terminal.clear_output()
         for line in state.get("terminal_logs", []):
-            logs.write(Text.from_ansi(str(line)))
+            terminal.add_line(Text.from_ansi(str(line)))
+        self._shell_prompt = f"❯ {state.get('cwd', '~')}"
+        terminal.set_prompt(self._shell_prompt)
         self._default_docs = Text.from_ansi("\n".join(state.get("docs_content", [])))
         if self._docs_query:
             self._render_docs(self._docs_query)
@@ -671,7 +905,7 @@ class CyberShellTUI(App[None]):
             copy.append(f"{getattr(pet, 'current_quote', 'Ready when you are.')}\n\n")
             copy.append("hint  clue\nman   manual", style=self._theme.text_muted)
             self.query_one("#pet-copy", Static).update(copy)
-        self.query_one("#command-input", Input).focus()
+        terminal.focus()
         self._input_mode = "lesson"
 
     def show_legacy(self) -> None:
@@ -712,7 +946,7 @@ class CyberShellTUI(App[None]):
         if mode == "legacy":
             self.query_one("#legacy-prompt", Static).update(cleaned or "›")
         elif mode == "lesson":
-            self.query_one("#shell-mark", Static).update("❯")
+            self.query_one("#terminal-input", TerminalInput).set_prompt(self._shell_prompt)
         else:
             self.query_one("#home-prompt", Static).update(cleaned or "›  CHOOSE")
 
@@ -803,13 +1037,14 @@ class CyberShellTUI(App[None]):
             if self._input_mode == "lesson" and self.size.width >= 65:
                 self.query_one("#docs-search", Input).focus()
             else:
-                self.query_one("#command-input", Input).focus()
+                self.query_one("#terminal-input", TerminalInput).focus()
             return
         if action == "open_manual":
-            entry = self.query_one("#command-input", Input)
-            entry.value = "man "
-            entry.cursor_position = len(entry.value)
-            entry.focus()
+            terminal = self.query_one("#terminal-input", TerminalInput)
+            terminal._buffer = "man "
+            terminal._cursor = 4
+            terminal.focus()
+            terminal._redraw()
             return
         mapping = {
             "choose_challenge": "map",
@@ -827,15 +1062,39 @@ class CyberShellTUI(App[None]):
 
     def _send_to_shell(self, command: str) -> None:
         self._show_view("lesson")
-        entry = self.query_one("#command-input", Input)
-        entry.focus()
+        terminal = self.query_one("#terminal-input", TerminalInput)
+        terminal.focus()
         self.input_queue.put(command)
-        self._log_shell(f"❯ {command}")
+        terminal.add_line(Text(f"{self._shell_prompt} {command}", style=self._theme.text_muted))
 
     def _log_shell(self, message: str, title: bool = False) -> None:
         style = f"bold {self._theme.cyan}" if title else self._theme.text
         if self._input_mode == "lesson":
-            self.query_one("#terminal-log", RichLog).write(Text(message, style=style))
+            self.query_one("#terminal-input", TerminalInput).add_line(
+                Text(message, style=style)
+            )
+
+    def play_snake(self) -> int:
+        """Run Terminal Snake on a Textual screen and return the final score.
+
+        Called (blocking) from the game thread; the app thread owns the screen.
+        """
+        done = threading.Event()
+        result: dict[str, int] = {}
+
+        def _show() -> None:
+            def _closed(score: Optional[int]) -> None:
+                result["score"] = int(score or 0)
+                done.set()
+
+            self.push_screen(KeyboardGame(), _closed)
+
+        try:
+            self.call_from_thread(_show)
+        except RuntimeError:
+            return 0
+        done.wait()
+        return result.get("score", 0)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "docs-search":
@@ -844,18 +1103,11 @@ class CyberShellTUI(App[None]):
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "docs-search":
             # The filter is already live; just move focus back to the shell.
-            self.query_one("#command-input", Input).focus()
+            self.query_one("#terminal-input", TerminalInput).focus()
             return
         value = event.value
         event.input.value = ""
-        self._history_index = None
-        if event.input.id == "command-input":
-            if value.strip():
-                self._history.append(value)
-            if value.strip().lower() in _COMMAND_TRIGGERS:
-                self._open_command_palette()
-                return
-        elif event.input.id == "home-input" and not value.strip():
+        if event.input.id == "home-input" and not value.strip():
             value = self._selected_home_value()
         self.input_queue.put(value)
 
@@ -875,34 +1127,26 @@ class CyberShellTUI(App[None]):
                 event.stop()
                 event.prevent_default()
                 return
-        if not isinstance(self.focused, Input) or self.focused.id != "command-input":
+        if not isinstance(self.focused, Input) or self.focused.id != "docs-search":
             return
-        if event.key == "tab":
-            self._complete_command()
-            event.stop()
-            event.prevent_default()
-        elif event.key == "up" and self._history:
-            start = len(self._history) if self._history_index is None else self._history_index
-            self._history_index = max(0, start - 1)
-            self.focused.value = self._history[self._history_index]
-            self.focused.cursor_position = len(self.focused.value)
-            event.stop()
-        elif event.key == "down" and self._history_index is not None:
-            self._history_index += 1
-            if self._history_index >= len(self._history):
-                self._history_index = None
-                self.focused.value = ""
-            else:
-                self.focused.value = self._history[self._history_index]
-            self.focused.cursor_position = len(self.focused.value)
-            event.stop()
+        if event.key == "escape":
+            self.query_one("#terminal-input", TerminalInput).focus()
 
-    def _complete_command(self) -> None:
+    def _on_terminal_submit(self, command: str) -> None:
+        """Handle a command typed into the inline terminal prompt."""
+        terminal = self.query_one("#terminal-input", TerminalInput)
+        terminal.add_line(Text(f"{self._shell_prompt} {command}", style=self._theme.text_muted))
+        if command.strip().lower() in _COMMAND_TRIGGERS:
+            self._open_command_palette()
+            return
+        self.input_queue.put(command)
+
+    def _on_terminal_complete(self) -> None:
         from cybershell.run import KNOWN_COMMANDS
 
-        entry = self.query_one("#command-input", Input)
-        value = entry.value
-        if not value or entry.cursor_position != len(value):
+        terminal = self.query_one("#terminal-input", TerminalInput)
+        value = terminal.value
+        if not value or terminal._cursor != len(value):
             return
         token_start = max(value.rfind(" "), value.rfind("|"), value.rfind(">")) + 1
         prefix = value[token_start:]
@@ -928,12 +1172,11 @@ class CyberShellTUI(App[None]):
         completion = matches[0] if len(matches) == 1 else posixpath.commonprefix(matches)
         if completion != prefix:
             suffix = " " if len(matches) == 1 and token_start == 0 else ""
-            entry.value = value[:token_start] + completion + suffix
-            entry.cursor_position = len(entry.value)
+            terminal._buffer = value[:token_start] + completion + suffix
+            terminal._cursor = len(terminal._buffer)
+            terminal._redraw()
         elif len(matches) > 1:
-            self.query_one("#terminal-log", RichLog).write(
-                Text("  ".join(matches[:8]), style=self._theme.text_muted)
-            )
+            terminal.add_line(Text("  ".join(matches[:8]), style=self._theme.text_muted))
 
     def action_focus_docs(self) -> None:
         if self._input_mode == "lesson" and self.size.width >= 65:
@@ -961,7 +1204,7 @@ class CyberShellTUI(App[None]):
                 search.value = ""
                 self._render_docs("")
             else:
-                self.query_one("#command-input", Input).focus()
+                self.query_one("#terminal-input", TerminalInput).focus()
             return
         self.input_queue.put("esc")
 
