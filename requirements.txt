@@ -8,3 +8,4 @@ textual>=8.2.8,<9
 pytest>=7.4.0
 pytest-cov>=4.1.0
 ruff>=0.1.0
+pexpect>=4.9.0  # used by the TTY/readline integration test

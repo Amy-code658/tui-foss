@@ -755,6 +755,11 @@ class CyberShellTUI(App[None]):
                 raise EOFError
             return answer
 
+        # Mark the bridge so engine helpers (wait_for_enter_or_esc) know that
+        # stdin is owned by the UI and must be read through input(), not the
+        # raw terminal. Without this they take the termios branch and hang.
+        bridged_input._cybershell_bridged = True  # type: ignore[attr-defined]
+
         try:
             builtins.input = bridged_input
             with contextlib.redirect_stdout(self._capture):

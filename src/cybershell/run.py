@@ -694,7 +694,17 @@ def explain_command(
 def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer", ui: Optional[Any] = None) -> str:
     """Personalized onboarding card asking user's name with clean web-app aesthetics."""
     if not sys.stdin.isatty():
-        return current_name if current_name else "Explorer"
+        # No interactive stream: keep the supplied profile if there is one.
+        # When a caller has stubbed input (tests, piped prompts), honour it so
+        # an explicitly provided name is never silently discarded.
+        if current_name and current_name != "Explorer":
+            return current_name
+        try:
+            raw_name = input().strip()
+        except (KeyboardInterrupt, EOFError):
+            return current_name if current_name else "Explorer"
+        clean_name = "".join(c for c in raw_name if c.isalnum() or c in ("-", "_", " ")).strip()
+        return (clean_name or current_name or "Explorer")[:16]
 
     if ui is not None:
         ui.show_onboarding(current_name)
@@ -1541,7 +1551,7 @@ def interactive_game_loop(
             continue
 
         if input_lower in (":games", "games", ":arcade", "arcade", "minigame", "puzzle"):
-            view_minigames_hub(player, app.minigame, width=width)
+            view_minigames_hub(player, app.minigame, width=width, ui=ui)
             continue
 
         if input_lower in (":reset", "reset"):
@@ -2031,7 +2041,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0, ui: Opti
                 play_chmod_decoder_interactive(player, width=width)
             elif choice_lower in ("7", "arcade", "minigame", "games"):
                 from cybershell.tools.minigames.hub import view_minigames_hub
-                view_minigames_hub(player, width=width)
+                view_minigames_hub(player, width=width, ui=ui)
             elif choice_lower in ("8", "manual", "help", "rules", "h", "?"):
                 view_field_manual(width)
             else:
@@ -2066,7 +2076,7 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0, ui: Opti
                 play_chmod_decoder_interactive(player, width=width)
             elif choice_lower in ("6", "arcade", "minigame", "games"):
                 from cybershell.tools.minigames.hub import view_minigames_hub
-                view_minigames_hub(player, width=width)
+                view_minigames_hub(player, width=width, ui=ui)
             elif choice_lower in ("7", "manual", "help", "rules", "h", "?"):
                 view_field_manual(width)
             else:

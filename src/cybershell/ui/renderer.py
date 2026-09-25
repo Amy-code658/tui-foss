@@ -969,6 +969,7 @@ def wait_for_enter_or_esc(prompt: str = "") -> str:
     if (
         hasattr(builtins.input, "mock_calls")
         or type(builtins.input).__name__ in ("MagicMock", "Mock")
+        or getattr(builtins.input, "_cybershell_bridged", False)
         or not sys.stdin.isatty()
     ):
         if prompt:
