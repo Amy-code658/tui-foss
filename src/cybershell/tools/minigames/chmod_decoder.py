@@ -156,7 +156,7 @@ def play_chmod_decoder_interactive(player: PlayerStats, width: int = 74) -> None
         except (KeyboardInterrupt, EOFError):
             break
 
-        if choice in ("0", "q", "exit", "back"):
+        if choice in ("0", "q", "exit", "back", "esc", "escape", "\x1b"):
             break
 
         if choice == "1":

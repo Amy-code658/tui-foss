@@ -216,7 +216,7 @@ def run_theme_selector(width: int = 70) -> None:
         except (KeyboardInterrupt, EOFError):
             break
 
-        if choice in ("0", "q", "exit", "back"):
+        if choice in ("0", "q", "exit", "back", "esc", "escape", "\x1b"):
             break
 
         selected = None

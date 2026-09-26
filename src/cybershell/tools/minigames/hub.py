@@ -108,7 +108,7 @@ def view_minigames_hub(
         except (KeyboardInterrupt, EOFError):
             break
 
-        if choice in ("0", "q", "quit", "exit", "back"):
+        if choice in ("0", "q", "quit", "exit", "back", "esc", "escape", "\x1b"):
             break
         elif choice == "1":
             from cybershell.tools.minigames.chmod_decoder import play_chmod_decoder_interactive
