@@ -17,10 +17,10 @@ BOLD: str = "\033[1m"
 DIM: str = "\033[2m"
 
 # Soft, Warm Color Palette
-GREEN: str = "\033[92m"    # Sprout green 🌱
-YELLOW: str = "\033[93m"   # Warm star yellow ⭐ / hints 💡
+GREEN: str = "\033[92m"    # Sprout green
+YELLOW: str = "\033[93m"   # Warm star yellow / hints
 BLUE: str = "\033[94m"     # Soft sky blue
-MAGENTA: str = "\033[95m"  # Gentle lavender / badges 🏆
+MAGENTA: str = "\033[95m"  # Gentle lavender / badges
 CYAN: str = "\033[96m"     # Soft teal / water
 WHITE: str = "\033[97m"    # Clean text
 RED: str = "\033[91m"      # Soft alert (used sparingly)
@@ -42,18 +42,9 @@ def visual_len(text: str) -> int:
 # Friendly Adventure Logos
 # =============================================================================
 
-ADVENTURE_LOGO: str = """  ____  _   _ _____ _____ _ ____    _     ___ _   _ _   _ __  __ 
- | __ )| | | |_   _| ____( ) ___|  | |   |_ _| \\ | | | | \\ \\/ / 
- |  _ \\| |_| | | | |  _| |/\\___ \\  | |    | ||  \\| | | | |>  <  
- | |_) |\\__, | | | | |___   ___) | | |___ | || |\\  | |_| |/ . \\ 
- |____/ |___/  |_| |_____| |____/  |_____|___|_| \\_|\\___//_/ \\_\\
-        _    ______     _______ _   _ _____ _   _ ____  _____ 
-       / \\  |  _ \\ \\   / / ____| \\ | |_   _| | | |  _ \\| ____|
-      / _ \\ | | | \\ \\ / /|  _| |  \\| | | | | | | | |_) |  _|  
-     / ___ \\| |_| |\\ V / | |___| |\\  | | | | |_| |  _ <| |___ 
-    /_/   \\_\\____/  \\_/  |_____|_| \\_| |_|  \\___/|_| \\_\\_____|"""
+ADVENTURE_LOGO: str = """  ____  _   _ _____ _____ _ ____    _     ___ _   _ _   _ __  __ \n | __ )| | | |_   _| ____( ) ___|  | |   |_ _| \\ | | | | \\ \\\\/ / \n |  _ \\\\| |_| | | | |  _| |/\\___ \\  | |    | ||  \\\\| | | | |>  <  \n | |_) |\\\\__, | | | | |___   ___) | | |___ | || |\\\\  | |_| |/ . \\ \n |____/ |___/  |_| |_____| |____/  |_____|___|_| \\_|\\\\___//_/ \\_\\\\\n        _    ______     _______ _   _ _____ _   _ ____  _____ \n       / \\\\  |  _ \\ \\   / / ____| \\ | |_   _| | | |  _ \\\\| ____|\n      / _ \\ | | | \\ \\ / /|  _| |  \\\\| | | | | | | | |_) |  _|  \n     / ___ \\| |_| |\\ V / | |___| |\\\\  | | | | |_| |  _ <| |___ \n    /_/   \\_\\\\____/  \\_/  |_____|_| \\_| |_|  \\\\___/|_| \\_\\_____|\""""
 
-ADVENTURE_LOGO_COMPACT: str = r"""[ 🌱 BYTE'S LINUX ADVENTURE • A FRIENDLY TERMINAL JOURNEY 🌱 ]"""
+ADVENTURE_LOGO_COMPACT: str = r"""[ :: BYTE'S LINUX ADVENTURE • A TERMINAL JOURNEY :: ]"""
 
 # Preserved for backward compatibility
 CYBER_LOGO = ADVENTURE_LOGO
@@ -77,27 +68,27 @@ def get_logo(styled: bool = False, wide: bool = False) -> str:
 
 
 # =============================================================================
-# Friendly Mascot & Guide Illustrations
+# Mascot & Guide Illustrations (Clean ASCII)
 # =============================================================================
 
 FIELD_MANUAL_HEADER: str = r"""
-        📖  FIELD MANUAL & RULES  📖
+        [ FIELD MANUAL & RULES ]
              (\__/)
              (・ω・)  "Welcome to Linux!"
-            / >🌱
+            / >*
 """
 
 PORTRAIT_BYTE: List[str] = [
     r"     (\__/)     ",
     r"     (・ω・)      ",
-    r"    / >🌱        ",
+    r"    / >*        ",
     r"   (  Byte  )   ",
     r"    '------'    ",
 ]
 
 PORTRAIT_FERN: List[str] = [
-    r"     .-''''-.   ",
-    r"    /  🌿    \   ",
+    r"     .------.   ",
+    r"    /  *    \   ",
     r"   |  (^‿^)  |  ",
     r"   (  Fern  )   ",
     r"    '------'    ",
@@ -105,7 +96,7 @@ PORTRAIT_FERN: List[str] = [
 
 PORTRAIT_PENNY: List[str] = [
     r"     .------.   ",
-    r"    /  [👓]  \   ",
+    r"    /  [oo] \   ",
     r"   |  (•‿•)  |  ",
     r"   ( Penny  )   ",
     r"    '------'    ",
@@ -113,7 +104,7 @@ PORTRAIT_PENNY: List[str] = [
 
 PORTRAIT_NOVA: List[str] = [
     r"     .------.   ",
-    r"    /  ⭐    \   ",
+    r"    /  *    \   ",
     r"   |  (★‿★)  |  ",
     r"   (  Nova  )   ",
     r"    '------'    ",
@@ -187,14 +178,14 @@ def get_access_granted_banner(
 
     lines = [
         b_top,
-        f"│{f'🎉 OBJECTIVE COMPLETE! 🎉':^{inner}}│",
+        f"│{f'[+] OBJECTIVE COMPLETE':^{inner}}│",
         f"│{title[:inner - 2]:^{inner}}│",
-        f"│{f'+{xp_awarded} XP ⭐':^{inner}}│",
+        f"│{f'+{xp_awarded} XP':^{inner}}│",
     ]
     if streak > 1:
-        lines.append(f"│{f'Streak: {streak} in a row! 🌱':^{inner}}│")
+        lines.append(f"│{f'Streak: {streak} in a row':^{inner}}│")
     if badge:
-        lines.append(f"│{f'New Badge: [{badge}] 🏆':^{inner}}│")
+        lines.append(f"│{f'New Badge: [{badge}]':^{inner}}│")
     lines.append(b_bot)
 
     plain = "\n".join(lines)
@@ -216,7 +207,7 @@ def get_level_unlocked_banner(
     b_bot = f"╰{'─' * inner}╯"
     lines = [
         b_top,
-        f"│{f'🌱 LEVEL {sector_num:02d} UNLOCKED':^{inner}}│",
+        f"│{f'[+] LEVEL {sector_num:02d} UNLOCKED':^{inner}}│",
         f"│{sector_name.title():^{inner}}│",
         b_bot,
     ]
@@ -228,17 +219,17 @@ def get_level_unlocked_banner(
 
 VICTORY_BANNER: str = """╭──────────────────────────────────────────────────────────────╮
 │                                                              │
-│              🎉  ADVENTURE COMPLETE!  🎉                     │
+│                 [ ADVENTURE COMPLETE ]                       │
 │                                                              │
 │           You explored all 15 Linux worlds and               │
-│               solved every puzzle! Great job! 🌱             │
+│               solved every puzzle! Great job!                │
 │                                                              │
-│                  🏆 MASTER EXPLORER 🏆                       │
+│                  [ MASTER EXPLORER ]                         │
 ╰──────────────────────────────────────────────────────────────╯"""
 
 # Backward compatibility stub
 DEFEAT_BANNER: str = """╭──────────────────────────────────────────────────────────────╮
-│                  Let's take a quick breath 🙂                │
+│                  Let's take a quick breath :)                │
 │                 Mistakes are a great way to learn!           │
 ╰──────────────────────────────────────────────────────────────╯"""
 
@@ -266,3 +257,108 @@ def format_boss_hp_bar(hp: int, max_hp: int = 100, bar_width: int = 16, styled: 
 def get_siren_banner(text: str = "", width: int = 76, styled: bool = False) -> str:
     """Alert banner (kept for backward compatibility)."""
     return ""
+
+
+# =============================================================================
+# FOSS Penguin Mascot
+# =============================================================================
+
+FOSS_PENGUIN: str = """\
+       _~_
+      (o o)
+     /  V  \\
+    /(  _  )\\
+      ^^ ^^"""
+
+
+def get_foss_penguin(styled: bool = True, frame: str = "normal") -> str:
+    """Return the FOSS penguin ASCII art.
+
+    Exact match to user reference:
+         _~_
+        (o o)
+       /  V  \\
+      /(  _  )\\
+        ^^ ^^
+
+    Supports four animation frames: normal, blink, happy, wave.
+
+    Args:
+        styled: If True, apply theme ANSI colors.
+        frame: Animation state ('normal', 'blink', 'wave', 'happy').
+    """
+    # Each raw line is exactly 13 chars (widest body line) so centering is consistent
+    if not styled:
+        if frame == "wave":
+            lines_raw = [
+                r"       _~_   /",
+                r"      (o o) //",
+                r"     /  V  |/ ",
+                r"    /(  _  )\ ",
+                r"      ^^ ^^   ",
+            ]
+        elif frame == "happy":
+            lines_raw = [
+                r"       _~_    ",
+                r"      (^ ^)   ",
+                r"     /  V  \  ",
+                r"    /(  _  )\ ",
+                r"      ^^ ^^   ",
+            ]
+        elif frame == "blink":
+            lines_raw = [
+                r"       _~_    ",
+                r"      (- -)   ",
+                r"     /  V  \  ",
+                r"    /(  _  )\ ",
+                r"      ^^ ^^   ",
+            ]
+        else:
+            lines_raw = [
+                r"       _~_    ",
+                r"      (o o)   ",
+                r"     /  V  \  ",
+                r"    /(  _  )\ ",
+                r"      ^^ ^^   ",
+            ]
+        return "\n".join(lines_raw)
+
+    try:
+        from cybershell.ui.theme import get_active_theme
+        theme = get_active_theme()
+        c_blue = theme.fg_blue
+        c_yellow = theme.fg_yellow
+        c_white = theme.fg_white
+    except Exception:
+        c_blue = "\033[38;2;88;166;255m"
+        c_yellow = "\033[38;2;241;224;90m"
+        c_white = "\033[97m"
+
+    rst = RESET
+    bld = BOLD
+
+    if frame == "blink":
+        eye_str = f"{bld}{c_white}(- -){rst}"
+    elif frame == "happy":
+        eye_str = f"{bld}{c_white}(^ ^){rst}"
+    else:
+        eye_str = f"{bld}{c_white}(o o){rst}"
+
+    if frame == "wave":
+        lines = [
+            f"       {c_blue}_~_   /{rst}",
+            f"      {eye_str} {c_blue}//{rst}",
+            f"     {c_blue}/  {bld}{c_yellow}V{rst}{c_blue}  |/{rst} ",
+            f"    {c_blue}/(  {bld}{c_yellow}_{rst}{c_blue}  )\\{rst} ",
+            f"      {bld}{c_yellow}^^ ^^{rst}   ",
+        ]
+    else:
+        lines = [
+            f"       {c_blue}_~_{rst}    ",
+            f"      {eye_str}   ",
+            f"     {c_blue}/  {bld}{c_yellow}V{rst}{c_blue}  \\{rst}  ",
+            f"    {c_blue}/(  {bld}{c_yellow}_{rst}{c_blue}  )\\{rst} ",
+            f"      {bld}{c_yellow}^^ ^^{rst}   ",
+        ]
+    return "\n".join(lines)
+

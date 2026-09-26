@@ -139,7 +139,7 @@ class CelebrationEffect:
         border_bot = "╰" + "─" * (len(title) + 16) + "╯"
         s3 = [
             styled(border_top, fg=HEX_YELLOW).center(width),
-            styled(f"│  ✨  {title}  ✨  │", fg=HEX_GREEN, bold=True).center(width),
+            styled(f"│  ✦  {title}  ✦  │", fg=HEX_GREEN, bold=True).center(width),
             styled(f"│      {subtitle}      │", fg=HEX_CYAN).center(width),
             styled(border_bot, fg=HEX_YELLOW).center(width),
         ]
@@ -165,7 +165,7 @@ class CelebrationEffect:
         border = "─" * (min(width - 6, max(36, visual_len(title) + 12)))
         card = [
             styled(f"╭{border}╮", fg=HEX_YELLOW).center(width),
-            styled(f"│   ✨  {title}  ✨   │", fg=HEX_GREEN, bold=True).center(width),
+            styled(f"│   ✦  {title}  ✦   │", fg=HEX_GREEN, bold=True).center(width),
             styled(f"│       {subtitle}       │", fg=HEX_CYAN).center(width),
             styled(f"╰{border}╯", fg=HEX_YELLOW).center(width),
         ]
@@ -200,3 +200,33 @@ def pulse_color(
     c2 = hex_to_rgb(end_hex)
     r, g, b = interpolate_color(c1, c2, norm)
     return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def animate_tux_welcome(
+    character_name: str = "Explorer",
+    width: int = 80,
+    quick: bool = False,
+) -> None:
+    """Smooth micro-animation of FOSS Tux penguin blinking and waving to greet the user."""
+    if not sys.stdout.isatty():
+        return
+
+    from cybershell.ui.ascii_art import get_foss_penguin
+    from cybershell.ui.theme import get_active_theme, BOLD, RESET
+    from cybershell.ui.renderer import pad_to_width
+
+    th = get_active_theme()
+    frames = ["normal", "blink", "wave", "happy"] if not quick else ["wave", "happy"]
+    delay = 0.12 if not quick else 0.06
+
+    for f in frames:
+        sys.stdout.write("\033[H\033[J")
+        raw_penguin = get_foss_penguin(styled=True, frame=f)
+        for line in raw_penguin.splitlines():
+            sys.stdout.write(pad_to_width(line, width, align="center") + "\n")
+        sys.stdout.write("\n")
+        msg = f"{BOLD}{th.fg_cyan}Welcome to FOSS CyberShell, {th.fg_yellow}{character_name}{th.fg_cyan}!{RESET}"
+        sys.stdout.write(pad_to_width(msg, width, align="center") + "\n")
+        sys.stdout.flush()
+        time.sleep(delay)
+

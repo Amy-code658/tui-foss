@@ -1,10 +1,11 @@
 # CyberShell v2.0 - Dependencies
 #
-# Core Runtime:
-# Zero external dependencies! CyberShell runs completely on the standard library.
-# Compatible with Python 3.8+ on Linux, macOS, and Windows.
+# Core Runtime — full-screen terminal interface:
+# Compatible with Python 3.11+ on Linux, macOS, and Windows.
+textual>=8.2.8,<9
 
 # Development, Testing, and Linting:
 pytest>=7.4.0
 pytest-cov>=4.1.0
 ruff>=0.1.0
+pexpect>=4.9.0  # used by the TTY/readline integration test

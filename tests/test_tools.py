@@ -66,6 +66,8 @@ REQUIRED_COMMAND_NAMES = (
     "ls", "cd", "cat", "grep", "chmod", "rm", "touch", "mkdir",
     "pwd", "find", "cp", "mv", "head", "tail", "wc", "echo",
     "man", "lookup", "help", "hint", "sort", "less",
+    "tree", "whoami", "rmdir", "clear", "ps", "kill", "git", "vim", "nano",
+    "diff", "tar", "curl", "wget", "df", "du", "top", "uname", "which", "history", "sed", "awk",
 )
 
 

@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import posixpath
+import random
 import sys
 import textwrap
 import time
@@ -68,6 +69,7 @@ from cybershell.ui.ascii_art import (
     YELLOW,
     format_boss_hp_bar,
     get_access_granted_banner,
+    get_foss_penguin,
     get_level_unlocked_banner,
     get_logo,
     get_portrait,
@@ -89,15 +91,44 @@ from cybershell.ui.renderer import (
     draw_field_manual_card,
     draw_panel,
     draw_question_card,
+    draw_overthewire_card,
+    draw_statusline,
+    draw_progress_bar,
     draw_split_panels,
     draw_opencode_layout,
     pad_to_width,
     terminal_size,
     visual_len,
+    wait_for_enter_or_esc,
 )
+from cybershell.ui.search import fuzzy_search_commands, render_telescope_results
 from cybershell.ui.rpg_app import RPGApp
-from cybershell.ui.animation import CelebrationEffect, ScreenTransition, Typewriter
-from cybershell.ui.theme import gradient_text, pill, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_YELLOW, HEX_BG_DARK, HEX_BLUE, FG_BORDER, RESET, BOLD
+from cybershell.ui.animation import CelebrationEffect, ScreenTransition, Typewriter, animate_tux_welcome
+from cybershell.ui.theme import (
+    get_active_theme,
+    set_theme,
+    list_themes,
+    THEMES,
+    gradient_text,
+    pill,
+    HEX_CYAN,
+    HEX_PURPLE,
+    HEX_GREEN,
+    HEX_YELLOW,
+    HEX_BG_DARK,
+    HEX_BLUE,
+    FG_BORDER,
+    RESET,
+    BOLD,
+    FG_WHITE,
+    FG_MUTED,
+)
+from cybershell.ui.pet import get_terminal_pet
+from cybershell.ui.ambience import get_ambience_manager
+from cybershell.ui.dashboard import view_progress_dashboard, render_progress_dashboard
+from cybershell.ui.command_center import run_command_center, run_theme_selector
+from cybershell.tools.minigames.hub import view_minigames_hub
+from cybershell.tools.codex import format_field_manual_entry, get_contextual_commands
 
 
 def wrap_text(text: str, width: int, prefix: str = "", style: str = "") -> List[str]:
@@ -170,12 +201,52 @@ def run_smoke_test() -> int:
 SAVE_FILE_PATH = os.path.expanduser("~/.cybershell_save.json")
 
 
+def get_save_path(username: Optional[str] = None) -> str:
+    """Return user-specific save path or default save path."""
+    if not username:
+        return SAVE_FILE_PATH
+    clean = "".join(c for c in username.lower() if c.isalnum() or c in ("-", "_")).strip()
+    if not clean or clean in ("explorer", "byte", "default"):
+        return SAVE_FILE_PATH
+    return os.path.expanduser(f"~/.cybershell_save_{clean}.json")
+
+
+def get_last_saved_username() -> Optional[str]:
+    """Retrieve the username from the most recent save file if available."""
+    default_path = os.path.expanduser("~/.cybershell_save.json")
+    candidates: List[Tuple[float, str]] = []
+    if os.path.isfile(default_path):
+        candidates.append((os.path.getmtime(default_path), default_path))
+
+    import glob
+    for p in glob.glob(os.path.expanduser("~/.cybershell_save_*.json")):
+        if os.path.isfile(p):
+            candidates.append((os.path.getmtime(p), p))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    most_recent = candidates[0][1]
+    try:
+        with open(most_recent, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        name = str(data.get("character_name", "")).strip()
+        if name:
+            return name
+    except Exception:
+        pass
+    return None
+
+
 def save_game(
     player: PlayerStats,
     cadet_mode: bool = True,
-    filepath: str = SAVE_FILE_PATH,
+    filepath: Optional[str] = None,
 ) -> bool:
     """Save player progression to JSON checkpoint file."""
+    if filepath is None:
+        filepath = get_save_path(player.character_name)
     try:
         data = {
             "character_name": player.character_name,
@@ -195,22 +266,58 @@ def save_game(
         }
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+
+        default_file = os.path.expanduser("~/.cybershell_save.json")
+        if filepath != default_file:
+            try:
+                with open(default_file, "w", encoding="utf-8") as f_def:
+                    json.dump(data, f_def, indent=2)
+            except Exception:
+                pass
         return True
     except Exception:
         return False
 
 
 def load_saved_game(
-    filepath: str = SAVE_FILE_PATH,
+    filepath: Optional[str] = None,
+    username: Optional[str] = None,
 ) -> Optional[Tuple[PlayerStats, bool]]:
     """Load player progression from checkpoint file."""
-    if not os.path.isfile(filepath):
+    target_path = filepath
+    if target_path is None:
+        if username:
+            candidate = get_save_path(username)
+            if os.path.isfile(candidate):
+                target_path = candidate
+            else:
+                default_file = os.path.expanduser("~/.cybershell_save.json")
+                if os.path.isfile(default_file):
+                    try:
+                        with open(default_file, "r", encoding="utf-8") as f:
+                            d = json.load(f)
+                        if str(d.get("character_name", "")).strip().lower() == username.strip().lower():
+                            target_path = default_file
+                    except Exception:
+                        pass
+                if target_path is None:
+                    return None
+        else:
+            default_file = os.path.expanduser("~/.cybershell_save.json")
+            if os.path.isfile(default_file):
+                target_path = default_file
+            else:
+                return None
+
+    if not os.path.isfile(target_path):
         return None
+
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(target_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+        saved_name = str(data.get("character_name", username or "Byte"))
         player = PlayerStats(
-            character_name=str(data.get("character_name", "Byte")),
+            character_name=username if username else saved_name,
             hp=int(data.get("hp", 100)),
             max_hp=int(data.get("max_hp", 100)),
             xp=int(data.get("xp", 0)),
@@ -233,15 +340,28 @@ def load_saved_game(
         return None
 
 
-def delete_saved_game(filepath: str = SAVE_FILE_PATH) -> bool:
+def delete_saved_game(
+    filepath: Optional[str] = None,
+    username: Optional[str] = None,
+) -> bool:
     """Remove checkpoint save file."""
-    try:
-        if os.path.isfile(filepath):
-            os.remove(filepath)
-            return True
-    except Exception:
-        pass
-    return False
+    deleted_any = False
+    targets = []
+    if filepath:
+        targets.append(filepath)
+    else:
+        if username:
+            targets.append(get_save_path(username))
+        targets.append(SAVE_FILE_PATH)
+
+    for p in targets:
+        try:
+            if os.path.isfile(p):
+                os.remove(p)
+                deleted_any = True
+        except Exception:
+            pass
+    return deleted_any
 
 
 KNOWN_COMMANDS = [
@@ -436,8 +556,34 @@ class VFSTabCompleter:
         return None
 
 
+def configure_readline_bindings() -> None:
+    """Register readline shortcuts, enabling Ctrl+Space, Ctrl+P, and Esc."""
+    if not READLINE_AVAILABLE or readline is None:
+        return
+    bindings = [
+        'set keyseq-timeout 100',
+        r'"\C-@": "\C-u:cmd\n"',        # Ctrl+Space (standard NUL \x00 in Linux terminals)
+        r'"\C- ": "\C-u:cmd\n"',        # Ctrl+Space alternative readline syntax
+        r'"\C-p": "\C-u:cmd\n"',        # Ctrl+P (Neovim / VSCode palette fallback)
+        r'"\e[32;5u": "\C-u:cmd\n"',    # CSI u keyboard protocol for Ctrl+Space
+        r'"\e[27;5;32~": "\C-u:cmd\n"', # Xterm modifyOtherKeys for Ctrl+Space
+        r'"\e": "\C-uexit\n"',          # Esc key to exit back to menu
+        r'"\e\e": "\C-uexit\n"',        # Double-Esc to exit
+    ]
+    for b in bindings:
+        try:
+            readline.parse_and_bind(b)
+        except Exception:
+            pass
+
+
+# Configure initial bindings on load
+if READLINE_AVAILABLE and readline is not None:
+    configure_readline_bindings()
+
+
 def setup_tab_completion(vfs: VirtualFileSystem) -> None:
-    """Configure readline tab completion for shell commands and VFS files."""
+    """Configure readline tab completion and keybindings for shell commands and VFS files."""
     if not READLINE_AVAILABLE or readline is None:
         return
     completer = VFSTabCompleter(vfs)
@@ -447,6 +593,7 @@ def setup_tab_completion(vfs: VirtualFileSystem) -> None:
         readline.set_completer_delims(" \t\n")
     except Exception:
         pass
+    configure_readline_bindings()
 
 
 def get_progressive_hint(
@@ -541,8 +688,102 @@ def explain_command(
 
 
 # =============================================================================
-# DEDICATED OPENING SCREEN & NAVIGATION
+# PERSONALIZED ONBOARDING & OPENING HERO SCREEN
 # =============================================================================
+
+def prompt_player_onboarding(width: int = 80, current_name: str = "Explorer", ui: Optional[Any] = None) -> str:
+    """Personalized onboarding card asking user's name with clean web-app aesthetics."""
+    if not sys.stdin.isatty():
+        # No interactive stream: keep the supplied profile if there is one.
+        # When a caller has stubbed input (tests, piped prompts), honour it so
+        # an explicitly provided name is never silently discarded.
+        if current_name and current_name != "Explorer":
+            return current_name
+        try:
+            raw_name = input().strip()
+        except (KeyboardInterrupt, EOFError):
+            return current_name if current_name else "Explorer"
+        clean_name = "".join(c for c in raw_name if c.isalnum() or c in ("-", "_", " ")).strip()
+        return (clean_name or current_name or "Explorer")[:16]
+
+    if ui is not None:
+        ui.show_onboarding(current_name)
+        try:
+            raw_name = input().strip()
+        except (KeyboardInterrupt, EOFError):
+            return current_name if current_name else "Explorer"
+        clean_name = "".join(c for c in raw_name if c.isalnum() or c in ("-", "_", " ")).strip()
+        return (clean_name or current_name or "Explorer")[:16]
+
+    term_w, term_h = terminal_size()
+    term_w = max(40, width)
+    box_w = max(44, min(term_w - 4, 74))
+    inner_w = box_w - 4
+    theme = get_active_theme()
+
+    sys.stdout.write("\033[H\033[J")
+    # Vertical centering for spacious terminals
+    top_margin = max(0, (term_h - 28) // 2)
+    if top_margin > 0:
+        sys.stdout.write("\n" * top_margin)
+
+    tux_raw = get_foss_penguin(styled=True, frame="wave")
+    for line in tux_raw.splitlines():
+        print(pad_to_width(line, term_w, align="center"))
+    print()
+
+    b_col = theme.fg_blue
+    b_rst = RESET
+    border_line = PANEL_HORIZONTAL * (box_w - 2)
+    top_border = f"{b_col}{PANEL_TOP_LEFT}{border_line}{PANEL_TOP_RIGHT}{b_rst}"
+    bot_border = f"{b_col}{PANEL_BOTTOM_LEFT}{border_line}{PANEL_BOTTOM_RIGHT}{b_rst}"
+    div_border = f"{b_col}{PANEL_DIVIDER_LEFT}{border_line}{PANEL_DIVIDER_RIGHT}{b_rst}"
+    side_char = f"{b_col}{PANEL_VERTICAL}{b_rst}"
+
+    def card_line(txt: str = "") -> str:
+        pad = max(0, (box_w - 2) - visual_len(txt) - 2)
+        return f"{side_char} {txt}{' ' * pad} {side_char}"
+
+    print(pad_to_width(top_border, term_w, align="center"))
+    print(pad_to_width(card_line(f"{BOLD}{theme.fg_cyan}{'WELCOME TO FOSS CYBERSHELL'.center(inner_w)}{RESET}"), term_w, align="center"))
+    print(pad_to_width(div_border, term_w, align="center"))
+    print(pad_to_width(card_line(""), term_w, align="center"))
+    print(pad_to_width(card_line(f"{WHITE}{'A friendly, modern playground for mastering Linux commands.'.center(inner_w)}{RESET}"), term_w, align="center"))
+    print(pad_to_width(card_line(f"{theme.fg_muted}{'Safe hands-on sandbox • Real-time feedback • Zero damage'.center(inner_w)}{RESET}"), term_w, align="center"))
+    print(pad_to_width(card_line(""), term_w, align="center"))
+    print(pad_to_width(card_line(f"{BOLD}{theme.fg_yellow}{'Before we start, what is your name, explorer?'.center(inner_w)}{RESET}"), term_w, align="center"))
+    if current_name and current_name != "Explorer":
+        print(pad_to_width(card_line(f"{theme.fg_cyan}{f'Active Profile: {current_name}'.center(inner_w)}{RESET}"), term_w, align="center"))
+    print(pad_to_width(card_line(""), term_w, align="center"))
+    print(pad_to_width(bot_border, term_w, align="center"))
+    print()
+
+    prompt_msg = f"Enter your name (press [ENTER] for {current_name}, or type new name): " if (current_name and current_name != "Explorer") else "Enter your name (default: Explorer): "
+    indent_pad = max(0, (term_w - box_w) // 2 + 2)
+    sys.stdout.write(f"{' ' * indent_pad}{BOLD}{theme.fg_cyan}{prompt_msg}{RESET}")
+    sys.stdout.flush()
+
+    try:
+        raw_name = input().strip()
+    except (KeyboardInterrupt, EOFError):
+        return current_name if current_name else "Explorer"
+
+    clean_name = "".join(c for c in raw_name if c.isalnum() or c in ("-", "_", " ")).strip()
+    if not clean_name:
+        clean_name = current_name if current_name else "Explorer"
+    clean_name = clean_name[:16]
+
+    sys.stdout.write("\033[H\033[J")
+    if top_margin > 0:
+        sys.stdout.write("\n" * top_margin)
+    tux_happy = get_foss_penguin(styled=True, frame="happy")
+    for line in tux_happy.splitlines():
+        print(pad_to_width(line, term_w, align="center"))
+    print()
+    print(pad_to_width(f"{BOLD}{theme.fg_green}[✓] Welcome aboard, {clean_name}! Tux is excited to train with you.{RESET}", term_w, align="center"))
+    print(pad_to_width(f"{theme.fg_muted}Initializing your personal Linux sandbox...{RESET}", term_w, align="center"))
+    return clean_name
+
 
 def render_opening_screen(
     player: PlayerStats,
@@ -550,29 +791,33 @@ def render_opening_screen(
     cadet_mode: bool = True,
     has_save: bool = False,
 ) -> str:
-    """Render the primary adventure opening screen."""
-    width = max(60, width)
-    inner_w = max(40, width - 4)
+    """Render the primary adventure opening screen with clean, centralized web-app aesthetics."""
+    term_w = max(40, width)
+    card_w = min(max(44, term_w - 4), 74)
+    theme = get_active_theme()
 
-    # 1. Title Logo
-    logo_raw = get_logo(styled=True)
-    logo_lines = [
-        pad_to_width(line, width, align="center")
-        for line in logo_raw.strip("\n").splitlines()
+    # 1. FOSS Penguin Tux (Larry Ewing authentic art)
+    penguin_raw = get_foss_penguin(styled=True, frame="normal")
+    penguin_lines = [
+        pad_to_width(line, term_w, align="center")
+        for line in penguin_raw.splitlines()
     ]
 
     # 2. Player summary line
     total_levels = 15
     curr_lvl = min(total_levels, player.current_sector + 1)
-    status_text_1 = (
-        f"{CYAN}Explorer:{RESET} {WHITE}{BOLD}{player.character_name}{RESET}  |  "
-        f"{YELLOW}Progress:{RESET} Level {curr_lvl}/{total_levels}  |  "
-        f"{YELLOW}⭐ {player.xp} XP{RESET}  |  "
-        f"{MAGENTA}🏆 {len(getattr(player, 'badges', []))} Badges{RESET}"
+    title_line = pad_to_width(f"{BOLD}{theme.fg_cyan}BYTE'S LINUX ADVENTURE  •  FOSS CYBERSHELL{RESET}", term_w, align="center")
+    status_text = (
+        f"{theme.fg_muted}Explorer: {BOLD}{theme.fg_white}{player.character_name}{RESET}  │  "
+        f"Progress: {BOLD}{theme.fg_yellow}Level {curr_lvl}/{total_levels}{RESET}  │  "
+        f"XP: {BOLD}{theme.fg_yellow}{player.xp}{RESET}"
     )
-    status_line_1 = pad_to_width(status_text_1, width, align="center")
+    status_line = pad_to_width(status_text, term_w, align="center")
 
-    # 3. Minimal Boxy Menu Layout
+    # 3. Main Directory Menu Layout
+    from cybershell.ui.renderer import draw_panel
+    from cybershell.ui.theme import fg_hex
+
     menu_title = "MAIN DIRECTORY • CHOOSE A DESTINATION"
 
     if has_save:
@@ -582,9 +827,11 @@ def render_opening_screen(
             ("3", "Adventure Map", "See all 15 levels and your progress"),
             ("4", "Command Guide", "Browse Linux command handbook"),
             ("5", "Backpack & Items", "Inspect collected goodies and badges"),
-            ("6", "Permissions Puzzle", "Practice chmod permissions minigame"),
-            ("7", "Field Manual & Rules", "Read the adventure manual & rules"),
-            ("0", "Exit Adventure", "Save and exit"),
+            ("6", "Chmod Perm Decoder", "Decode permissions & solve security doors"),
+            ("7", "Arcade Mini-Games", "Terminal Snake, Vim Dojo, Typing Dojo"),
+            ("8", "Field Manual & Rules", "Read the adventure manual & rules"),
+            ("T", "Theme Selector", f"Active: {theme.display_name} (type 'foss', 'sakura', etc.)"),
+            ("0", "Exit Adventure", "Exit the game (or press ESC)"),
         ]
     else:
         options = [
@@ -592,28 +839,30 @@ def render_opening_screen(
             ("2", "Adventure Map", "See all 15 levels of the journey"),
             ("3", "Command Guide", "Browse Linux command handbook"),
             ("4", "Backpack & Items", "Inspect collected goodies and badges"),
-            ("5", "Permissions Puzzle", "Practice chmod permissions minigame"),
-            ("6", "Field Manual & Rules", "Read the adventure manual & rules"),
-            ("0", "Exit Adventure", "Exit the game"),
+            ("5", "Chmod Perm Decoder", "Decode permissions & solve security doors"),
+            ("6", "Arcade Mini-Games", "Terminal Snake, Vim Dojo, Typing Dojo"),
+            ("7", "Field Manual & Rules", "Read the adventure manual & rules"),
+            ("T", "Theme Selector", f"Active: {theme.display_name} (type 'foss', 'sakura', etc.)"),
+            ("0", "Exit Adventure", "Exit the game (or press ESC)"),
         ]
 
     menu_content = []
     menu_content.append("")
-    colors = [HEX_PURPLE, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_BLUE, HEX_YELLOW, HEX_CYAN, HEX_PURPLE]
+    colors = [HEX_PURPLE, HEX_CYAN, HEX_PURPLE, HEX_GREEN, HEX_BLUE, HEX_YELLOW, HEX_CYAN, HEX_PURPLE, HEX_BLUE]
     for num, label, summary in options:
-        c = colors[int(num)] if num.isdigit() else HEX_PURPLE
+        c = colors[int(num) % len(colors)] if num.isdigit() else HEX_PURPLE
         prefix = f"{pill(num, HEX_BG_DARK, c)}  {CYAN}{BOLD}{label:<22}{RESET}"
         menu_content.append(f"  {prefix} {WHITE}{summary}{RESET}")
     menu_content.append("")
+    menu_content.append(f"  {BOLD}{theme.fg_yellow}Pro-tip:{RESET} {theme.fg_white}Type any theme name directly (e.g. 'foss', 'sakura', 'mint', 'dracula') to switch instantly!{RESET}")
+    menu_content.append("")
 
-    from cybershell.ui.renderer import draw_panel
-    from cybershell.ui.theme import fg_hex
-    menu_panel_lines = draw_panel(menu_title, menu_content, inner_w, styled=True, border_color=fg_hex(HEX_PURPLE))
-    
+    menu_panel_lines = draw_panel(menu_title, menu_content, card_w, styled=True, border_color=fg_hex(HEX_PURPLE))
+
     all_lines = (
-        logo_lines
-        + ["", status_line_1, ""]
-        + [pad_to_width(line, width, align="center") for line in menu_panel_lines]
+        penguin_lines
+        + ["", title_line, status_line, ""]
+        + [pad_to_width(line, term_w, align="center") for line in menu_panel_lines]
         + [""]
     )
     return "\n".join(all_lines)
@@ -631,7 +880,7 @@ def show_mandatory_field_manual(width: int = 80) -> None:
         print(f"  {line}")
     print()
     try:
-        input(f"  {YELLOW}{BOLD}[ Press ENTER to start your adventure! 🌱 ]{RESET} ")
+        input(f"  {YELLOW}{BOLD}[ Press ENTER to enter the wargame shell! ]{RESET} ")
     except (KeyboardInterrupt, EOFError):
         pass
 
@@ -657,7 +906,7 @@ def view_codex(codex: Codex, player: PlayerStats, width: int) -> None:
         for h_line in header.splitlines():
             print(f"  {h_line}")
         print()
-        print(f"  {GREEN}{BOLD}[ 🌱 LINUX COMMAND GUIDE ]{RESET}")
+        print(f"  {GREEN}{BOLD}[ LINUX COMMAND GUIDE ]{RESET}")
         desc = (
             "Browse handy Linux commands or search for what you want to do. "
             "Type a command name (e.g. 'cat', 'ls', 'grep', 'chmod') to see how it works!"
@@ -676,12 +925,12 @@ def view_codex(codex: Codex, player: PlayerStats, width: int) -> None:
         print(f"  {DIM}{'─' * card_w}{RESET}")
         try:
             term = input(
-                f"  {YELLOW}Enter command or keyword (or press Enter / '0' to return to menu): {RESET}"
+                f"  {YELLOW}Enter command or keyword (or press Enter / '0' / ESC to return): {RESET}"
             ).strip()
         except (KeyboardInterrupt, EOFError):
             break
 
-        if not term or term in ("0", "q", "quit", "exit", "back", "menu"):
+        if not term or term.lower() in ("0", "q", "quit", "exit", "back", "menu", "esc", "escape", "\x1b"):
             break
 
         entry_text = codex.display_command(term)
@@ -705,9 +954,8 @@ def view_codex(codex: Codex, player: PlayerStats, width: int) -> None:
             else:
                 print(f"\n  {RED}No commands matching '{term}' found. Try 'ls', 'cat', or 'grep'!{RESET}")
 
-        try:
-            input(f"\n  {YELLOW}Press Enter to return to command list...{RESET}")
-        except (KeyboardInterrupt, EOFError):
+        key = wait_for_enter_or_esc(f"\n  {YELLOW}Press Enter or ESC to return to command list...{RESET}")
+        if key == "esc":
             break
 
 
@@ -727,18 +975,18 @@ def view_inventory(player: PlayerStats, width: int) -> None:
     for h_line in header.splitlines():
         print(f"  {h_line}")
     print()
-    print(f"  {YELLOW}{BOLD}[ 🎒 YOUR BACKPACK & GOODIES ]{RESET}")
+    print(f"  {YELLOW}{BOLD}[ YOUR BACKPACK & GOODIES ]{RESET}")
     desc = "Special items, stars, and badges collected during your Linux journey."
     for line in textwrap.wrap(desc, width=card_w - 4):
         print(f"  {WHITE}{line}{RESET}")
     print()
     if not player.inventory:
         print(f"  {DIM}Your backpack is currently empty.{RESET}")
-        print(f"  {GREEN}Complete levels and discover secrets to earn items and stars! 🌱{RESET}")
+        print(f"  {GREEN}Complete sectors and discover secrets to collect credentials.{RESET}")
     else:
         for idx, itm in enumerate(player.inventory, start=1):
             rarity_col = MAGENTA if itm.rarity in ("epic", "legendary", "mythic") else GREEN
-            print(f"  [{idx}] 🎁 {WHITE}{BOLD}{itm.name}{RESET} [{rarity_col}{itm.rarity.upper()}{RESET}]")
+            print(f"  [{idx}] [+] {WHITE}{BOLD}{itm.name}{RESET} [{rarity_col}{itm.rarity.upper()}{RESET}]")
             print(f"       {CYAN}{itm.description}{RESET}")
             print()
 
@@ -746,13 +994,10 @@ def view_inventory(player: PlayerStats, width: int) -> None:
     if raw_badges:
         print(f"\n  {YELLOW}{BOLD}BADGES EARNED:{RESET}")
         for b in raw_badges:
-            print(f"    🏆 {b}")
+            print(f"    [*] {b}")
 
     print(f"\n  {DIM}{'─' * card_w}{RESET}")
-    try:
-        input(f"  {YELLOW}Press Enter to return to Main Menu...{RESET}")
-    except (KeyboardInterrupt, EOFError):
-        pass
+    wait_for_enter_or_esc(f"  {YELLOW}Press Enter or ESC to return to Main Menu...{RESET}")
 
 
 def view_map(mainframe: MainframeMap, player: PlayerStats, all_quests: Dict[int, Quest], width: int) -> None:
@@ -774,10 +1019,7 @@ def view_map(mainframe: MainframeMap, player: PlayerStats, all_quests: Dict[int,
     for m_line in render_adventure_map(player, all_quests, width=card_w).splitlines():
         print(f"  {m_line}")
     print(f"\n  {DIM}{'─' * card_w}{RESET}")
-    try:
-        input(f"  {YELLOW}Press Enter to return to Main Menu...{RESET}")
-    except (KeyboardInterrupt, EOFError):
-        pass
+    wait_for_enter_or_esc(f"  {YELLOW}Press Enter or ESC to return to Main Menu...{RESET}")
 
 
 def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> None:
@@ -804,7 +1046,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
         print()
 
         # Permissions Learning Reference Card (compact 3 lines)
-        print(f"  {YELLOW}{BOLD}[ 📖 PERMISSIONS FORMULA ]{RESET}")
+        print(f"  {YELLOW}{BOLD}[ PERMISSIONS FORMULA ]{RESET}")
         print(f"  {WHITE}Triads : {GREEN}[User/Owner]{WHITE} {CYAN}[Group]{WHITE} {MAGENTA}[Others]{RESET}")
         print(f"  {WHITE}Values : {BOLD}r (read) = 4{RESET}  |  {BOLD}w (write) = 2{RESET}  |  {BOLD}x (execute) = 1{RESET}  |  {DIM}- = 0{RESET}")
         print(f"  {DIM}Example: rwxr-xr-x -> User: 4+2+1=7 | Group: 4+0+1=5 | Others: 4+0+1=5  =>  755{RESET}")
@@ -826,7 +1068,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
 
         p_lines = [
             f"  {p_top}",
-            f"  {p_row(f'  {YELLOW}{BOLD}🚪 PUZZLE #{puzzle.door_number:02d} • Convert to 3-Digit Octal Code{RESET}')}",
+            f"  {p_row(f'  {YELLOW}{BOLD}PUZZLE #{puzzle.door_number:02d} • Convert to 3-Digit Octal Code{RESET}')}",
             f"  {p_div}",
             f"  {p_row(f'  Symbolic Pattern : {BOLD}{WHITE}{puzzle.permission}{RESET}')}",
             f"  {p_row(f'    • {GREEN}User   (u){RESET}   : {WHITE}{u_sym}{RESET}   (r=4, w=2, x=1, -=0)')}",
@@ -856,7 +1098,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
 
         if not guess:
             feedback = [
-                f"  {YELLOW}💡 Enter a 3-digit octal number (like 755 or 644) to test your answer!{RESET}",
+                f"  {YELLOW}Enter a 3-digit octal number (like 755 or 644) to test your answer!{RESET}",
                 f"  {DIM}Type 'h' for a hint, 'n' to skip to next puzzle, or '0' to exit.{RESET}",
             ]
             continue
@@ -867,7 +1109,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
             u_x = 1 if u_sym[2] == "x" else 0
             u_val = u_r + u_w + u_x
             feedback = [
-                f"  {CYAN}{BOLD}💡 STEP-BY-STEP HINT:{RESET}",
+                f"  {CYAN}{BOLD}STEP-BY-STEP HINT:{RESET}",
                 f"     1. User '{u_sym}' has values {u_r} + {u_w} + {u_x} = {BOLD}{u_val}{RESET} (1st digit).",
                 f"     2. Next calculate Group '{g_sym}' and Others '{o_sym}' the same way!",
             ]
@@ -892,7 +1134,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
                 print(f"  {h_line}")
             print()
             for rl in [
-                f"  {YELLOW}{BOLD}[ 📖 PERMISSIONS FORMULA ]{RESET}",
+                f"  {YELLOW}{BOLD}[ PERMISSIONS FORMULA ]{RESET}",
                 f"  {WHITE}Triads : {GREEN}[User/Owner]{WHITE} {CYAN}[Group]{WHITE} {MAGENTA}[Others]{RESET}",
                 f"  {WHITE}Values : {BOLD}r (read) = 4{RESET}  |  {BOLD}w (write) = 2{RESET}  |  {BOLD}x (execute) = 1{RESET}  |  {DIM}- = 0{RESET}",
                 f"  {DIM}Example: rwxr-xr-x -> User: 4+2+1=7 | Group: 4+0+1=5 | Others: 4+0+1=5  =>  755{RESET}",
@@ -902,10 +1144,10 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
             for pl in p_lines:
                 print(pl)
             print()
-            print(f"  {GREEN}{BOLD}🎉 CORRECT! {puzzle.permission} = {puzzle.answer}!{RESET}")
+            print(f"  {GREEN}{BOLD}[+] CORRECT! {puzzle.permission} = {puzzle.answer}!{RESET}")
             print(f"  {GREEN}   Breakdown: User={u_val} ({u_sym}), Group={g_val} ({g_sym}), Others={o_val} ({o_sym}){RESET}")
             if result.xp_awarded > 0:
-                print(f"  {YELLOW}⭐ +{result.xp_awarded} XP awarded to {player.character_name}! Total XP: {player.xp}{RESET}")
+                print(f"  {YELLOW}+{result.xp_awarded} XP awarded to {player.character_name}! Total XP: {player.xp}{RESET}")
             print()
             try:
                 nxt = input(f"  {YELLOW}[ Press Enter for next puzzle, or 0 to exit ]{RESET} ").strip()
@@ -932,7 +1174,7 @@ def view_minigame(minigame: ChmodMinigame, player: PlayerStats, width: int) -> N
             o_val = o_r + o_w + o_x
 
             feedback = [
-                f"  {RED}{BOLD}❌ '{guess}' is not correct for '{puzzle.permission}'.{RESET}",
+                f"  {RED}{BOLD}[X] '{guess}' is not correct for '{puzzle.permission}'.{RESET}",
                 f"  {YELLOW}Let's calculate step by step:{RESET}",
                 f"    • {GREEN}User   '{u_sym}'{RESET} : {u_r} + {u_w} + {u_x} = {BOLD}{u_val}{RESET}",
                 f"    • {CYAN}Group  '{g_sym}'{RESET} : {g_r} + {g_w} + {g_x} = {BOLD}{g_val}{RESET}",
@@ -952,15 +1194,15 @@ def view_field_manual(width: int) -> None:
             print(f"  {line}")
         print()
         if page == 1:
-            prompt = f"  {YELLOW}{BOLD}[ Enter: Next Page (Commands) | 0 or q: Main Menu ]{RESET} "
+            prompt = f"  {YELLOW}{BOLD}[ Enter: Next Page (Commands) | 0 / q / ESC: Main Menu ]{RESET} "
         else:
-            prompt = f"  {YELLOW}{BOLD}[ Enter: Main Menu | 1: Page 1 (Rules) | 0 or q: Main Menu ]{RESET} "
+            prompt = f"  {YELLOW}{BOLD}[ Enter: Main Menu | 1: Page 1 (Rules) | 0 / q / ESC: Main Menu ]{RESET} "
         try:
             choice = input(prompt).strip().lower()
         except (KeyboardInterrupt, EOFError):
             break
 
-        if choice in ("0", "q", "quit", "exit", "menu"):
+        if choice in ("0", "q", "quit", "exit", "menu", "esc", "escape", "\x1b"):
             break
         if page == 1:
             if choice in ("1",):
@@ -1013,11 +1255,11 @@ def resolve_option_choice(
     chosen_letter = ["A", "B", "C", "D"][idx]
 
     if idx == correct_idx:
-        msg = f"💡 [{chosen_letter}] Correct! Running: {cmd_str}"
+        msg = f"[{chosen_letter}] Correct! Running: {cmd_str}"
         return cmd_str, msg
     else:
         meaning = selected_opt.split(" - ")[1].strip() if " - " in selected_opt else selected_opt
-        msg = f"💡 [{chosen_letter}] '{cmd_str}' is for {meaning}. Try looking for what solves our current task!"
+        msg = f"[{chosen_letter}] '{cmd_str}' is for {meaning}. Try looking for what solves our current task!"
         return None, msg
 
 
@@ -1031,6 +1273,7 @@ def interactive_game_loop(
     all_quests: Optional[Dict[int, Quest]] = None,
     app: Optional[RPGApp] = None,
     cadet_mode: bool = True,
+    ui: Optional[Any] = None,
 ) -> None:
     """Interactive adventure terminal loop with compact rounded HUD."""
     if player is None:
@@ -1071,31 +1314,30 @@ def interactive_game_loop(
     box_w = min(init_w - 4, 68)
 
     # Initial logs
-    ScreenTransition.wipe_screen(delay=0.005)
+    if ui is None:
+        ScreenTransition.wipe_screen(delay=0.005)
     if player.current_sector == 0 and not quest.is_completed:
-        Typewriter.stream_text("🌱 Welcome to Level 1: Look Around!", styled_prefix=GREEN, delay=0.015)
-        Typewriter.stream_text("Solve the challenge question above by typing the command or option letter!", styled_prefix=CYAN, delay=0.015)
-        Typewriter.stream_text("Tip: Type '?' for a hint, 'map' for level map.", styled_prefix=DIM, delay=0.015)
         terminal_logs: List[str] = [
-            f"{GREEN}🌱 Welcome to Level 1: Look Around!{RESET}",
-            f"{CYAN}Solve the challenge question above by typing the command or option letter!{RESET}",
-            f"{DIM}Tip: Type '?' for a hint, 'map' for level map.{RESET}",
+            f"{GREEN}[+] Level 1: Look Around — type a command or pick A/B/C/D{RESET}",
         ]
     else:
         lvl_display = player.current_sector + 1
-        Typewriter.stream_text(f"🌱 Entering Level {lvl_display}/15: {quest.sector_name}!", styled_prefix=GREEN, delay=0.015)
         terminal_logs = [
-            f"{GREEN}🌱 Entering Level {lvl_display}/15: {quest.sector_name}!{RESET}",
-            f"{DIM}Type 'help' for commands, '?' for a hint, 'map' for level map.{RESET}",
+            f"{GREEN}[+] Level {lvl_display}/15: {quest.sector_name}{RESET}",
         ]
+
 
     hint_tier = 1
     last_objective_id: Optional[str] = None
     level_start_badges = list(getattr(player, "badges", []))
     docs_filter_term = ""
 
+    # Commands the engine can actually execute (used to filter the docs pane)
+    _executable_cmds: set = set(interpreter.commands.command_names) | {"tree", "clear"}
+
     while True:
         width, height = terminal_size()
+
         app.hp = player.hp
         app.max_hp = player.max_hp
         app.xp = player.xp
@@ -1106,7 +1348,7 @@ def interactive_game_loop(
         if active_obj:
             obj_desc = active_obj.description
         else:
-            obj_desc = "All level goals complete! Type 'next' or explore freely."
+            obj_desc = "All goals done. Type 'next' to continue."
 
         if active_obj and active_obj.id != last_objective_id:
             last_objective_id = active_obj.id
@@ -1114,116 +1356,164 @@ def interactive_game_loop(
 
         cwd_path = vfs.get_cwd_path()
         cwd_short = cwd_path.replace(f"/home/{vfs.user}", "~")
+        u_name = (player.character_name or "explorer").lower().replace(" ", "-")
+        prompt_prefix = f"{GREEN}{u_name}@cybershell:{cwd_short}$"
 
-        task_inner_w = int(width * 0.70) - 4
-        # Compact task content
-        task_content = []
-        task_content.append(f"{YELLOW}Level {player.current_sector + 1}/15: {quest.sector_name}{RESET}")
+        # Usable dimensions for 4-pane layout
+        usable_w = max(40, width - 2) if width > 42 else max(40, width - 1)
+        left_w = int(usable_w * 0.65)
+        right_w = usable_w - left_w - 1
+        task_inner_w = max(10, left_w - 4)
+        docs_inner_w = max(10, right_w - 4)
+
+        # 1. Top-Left Pane: OverTheWire Mission Task (No ABCD quiz)
+        total_challenges = 27 if not all_quests else max(27, len(all_quests))
+        completed_count = len(getattr(player, "completed_sectors", []))
+        pct_prog = int((completed_count / total_challenges) * 100) if total_challenges > 0 else 0
+
+        # Dynamically resolve active theme and ambience
+        theme = get_active_theme()
+        ambience = get_ambience_manager()
+
+        task_content: List[str] = []
+        task_content.append(f"{theme.fg_yellow}LEVEL {player.current_sector + 1:02d} // {quest.sector_name.upper()}{RESET}  {DIM}({completed_count} of {total_challenges} complete - {pct_prog}%){RESET}")
         if active_obj:
             task_content.append("")
-            desc = getattr(active_obj, 'question', '') or active_obj.description
-            for line in textwrap.wrap(desc, width=task_inner_w):
-                task_content.append(f"{BOLD}{line}{RESET}")
+            # 1. Question (Clean wrapping)
+            q_text = getattr(active_obj, "question", "") or active_obj.description
+            q_lines = textwrap.wrap(f"QUESTION : {q_text}", width=task_inner_w, subsequent_indent="           ")
+            for i, line in enumerate(q_lines):
+                task_content.append(f"{BOLD}{theme.fg_white}{line}{RESET}" if i == 0 else f"{theme.fg_white}{line}{RESET}")
+
+            # 2. Progress bar just below the question
+            bar_w = min(16, max(6, task_inner_w - 20))
+            prog_bar = draw_progress_bar(completed_count, total_challenges, width=bar_w, styled=True)
+            task_content.append(f"{theme.fg_yellow}PROGRESS : {RESET}{prog_bar} {theme.fg_white}{completed_count}/{total_challenges}{RESET} {DIM}({pct_prog}%){RESET}")
+
+            # 3. 4 Options (No commands list in question box!)
+            opt_labels = ["A", "B", "C", "D"]
             if getattr(active_obj, "options", None):
                 task_content.append("")
-                for idx, opt in enumerate(active_obj.options):
-                    letter = ["A", "B", "C", "D"][idx]
-                    for i, opt_line in enumerate(textwrap.wrap(opt, width=task_inner_w - 6)):
-                        if i == 0:
-                            task_content.append(f"  [{letter}] {opt_line}")
-                        else:
-                            task_content.append(f"      {opt_line}")
-        else:
+                for i, opt in enumerate(active_obj.options[:4]):
+                    lbl = opt_labels[i] if i < len(opt_labels) else str(i + 1)
+                    task_content.append(f"  {theme.fg_cyan}[{lbl}]{RESET} {theme.fg_white}{opt}{RESET}")
+
+            # 4. Intel (Only question, options, intel, and progress needed)
             task_content.append("")
-            task_content.append("All level goals complete! Type 'next'.")
+            intel_lines = textwrap.wrap("INTEL    : Type command or [A-D] | 'hint' for clues | ':cmd' for menu", width=task_inner_w, subsequent_indent="           ")
+            for line in intel_lines:
+                task_content.append(f"{DIM}{line}{RESET}")
 
-        docs_inner_w = int(width * 0.30) - 4
-        # Docs content
-        docs_content = []
-        if docs_filter_term:
-            filtered_cmds = []
-            term = docs_filter_term.lower()
-            for cmd in app.codex.list_commands():
-                matches = term in cmd['name'].lower() or term in cmd['description'].lower()
-                match_extra = None
-                
-                if not matches and 'flags' in cmd:
-                    for f_name, f_desc in cmd['flags'].items():
-                        if term in f_name.lower() or term in f_desc.lower():
-                            matches = True
-                            match_extra = f"Flag {f_name}: {f_desc}"
-                            break
-                            
-                if not matches and 'examples' in cmd:
-                    for ex in cmd['examples']:
-                        if term in ex.lower():
-                            matches = True
-                            match_extra = f"Ex: {ex}"
-                            break
-                            
-                if not matches and 'combos' in cmd:
-                    for cb in cmd['combos']:
-                        if term in cb.lower():
-                            matches = True
-                            match_extra = f"Combo: {cb}"
-                            break
-                
-                if matches:
-                    cmd_copy = dict(cmd)
-                    if match_extra:
-                        cmd_copy['_match_extra'] = match_extra
-                    filtered_cmds.append(cmd_copy)
-            docs_content.append(f"{YELLOW}Search: '{docs_filter_term}'{RESET}")
+            # Compute suggested for local docs in right pane without showing in question box
+            suggested = []
+            if getattr(active_obj, "command", None):
+                for c in active_obj.command.replace("|", ",").split(","):
+                    c_clean = c.strip()
+                    if c_clean and c_clean not in suggested:
+                        suggested.append(c_clean)
+            if getattr(active_obj, "options", None):
+                for opt in active_obj.options:
+                    c_opt = opt.split(" - ")[0].strip().split()[0]
+                    if c_opt not in suggested:
+                        suggested.append(c_opt)
+            for c in ["pwd", "ls", "cd", "cat", "man"]:
+                if c not in suggested and len(suggested) < 4:
+                    suggested.append(c)
         else:
-            filtered_cmds = app.codex.list_commands()
-            
-        for cmd in filtered_cmds[:15]:
-            desc_lines = textwrap.wrap(cmd['description'], width=docs_inner_w - 9)
-            if not desc_lines:
-                desc_lines = [""]
-            docs_content.append(f"{CYAN}{cmd['name']:<8}{RESET} {DIM}{desc_lines[0]}{RESET}")
-            for extra_line in desc_lines[1:]:
-                docs_content.append(f"         {DIM}{extra_line}{RESET}")
-                
-            if '_match_extra' in cmd:
-                match_lines = textwrap.wrap(cmd['_match_extra'], width=docs_inner_w - 4)
-                for ml in match_lines:
-                    docs_content.append(f"    {GREEN}{ml}{RESET}")
-                
-        if not filtered_cmds:
-            docs_content.append(f"{RED}No results found.{RESET}")
-            
-        docs_content.append("")
-        docs_content.append(f"{DIM}Type 'search <term>' to filter{RESET}")
+            suggested = []
+            task_content.append("")
+            task_content.append(f"{theme.fg_green}[+] All objectives done.{RESET}")
 
-        # Mascot content
-        mascot_content = get_portrait(player.character_name, styled=True)
-        quotes = ["You got this! 🌱", "Keep exploring!", "Every error is a lesson!"]
-        mascot_content.append("")
-        mascot_content.append(f"{GREEN}{quotes[player.xp % len(quotes)]}{RESET}".center(30))
+        # 2. Top-Right Pane: Local Docs (Context-Aware & Fuzzy Searchable)
+        docs_content: List[str] = []
+        if docs_filter_term:
+            all_matches = fuzzy_search_commands(docs_filter_term, app.codex.list_commands(), limit=16)
+            filtered_cmds = [c for c in all_matches if c.get("name", "") in _executable_cmds]
+            docs_content.append(f"{theme.fg_yellow}'{docs_filter_term}' ({len(filtered_cmds)}){RESET}")
+        else:
+            quest_cmds = suggested if active_obj else []
+            all_cmds = app.codex.get_contextual_commands(
+                relevant_cmds=quest_cmds,
+                limit=20,
+            )
+            # Only show commands the engine can actually execute
+            filtered_cmds = [c for c in all_cmds if c.get("name", "") in _executable_cmds]
+            docs_content.append(f"{DIM}Commands{RESET}")
+
+        for cmd in filtered_cmds[:14]:
+            name = cmd.get("name", "")
+            desc = cmd.get("purpose") or cmd.get("description", "")
+            avail_desc = max(8, docs_inner_w - 8)
+            desc_part = desc[:avail_desc] if len(desc) > avail_desc else desc
+            docs_content.append(f"{theme.fg_cyan}{name:<7}{RESET} {DIM}{desc_part}{RESET}")
+
+        if not filtered_cmds:
+            docs_content.append(f"{theme.fg_red}No matches.{RESET}")
+
+
+        # 3. Bottom-Right Pane: Terminal Pet (Byte)
+        pet = get_terminal_pet()
+        pet.set_player_name(player.character_name)
+        mascot_content = pet.render(width=docs_inner_w + 2, height=6, styled=True)
+
+        # 4. Render 4-Pane Opencode Layout with commandline inside the TERMINAL pane
+        layout_h = max(14, height - (4 if ambience.rain_enabled else 3))
+        active_prompt = f"{BOLD}{theme.fg_green}{u_name}@cybershell{RESET}:{BOLD}{theme.fg_blue}{cwd_short}{RESET}$ "
+        display_term_logs = list(terminal_logs) + [active_prompt]
 
         layout = draw_opencode_layout(
             task_title="YOUR TASK", task_content=task_content,
-            term_title="TERMINAL", term_content=terminal_logs,
+            term_title="TERMINAL", term_content=display_term_logs,
             docs_title="LOCAL DOCS", docs_content=docs_content,
             mascot_content=mascot_content,
-            width=width, height=height - 2, # leaving room for prompt
-            gap=1, styled=True
+            width=width, height=layout_h, gap=1, styled=True
         )
 
         footer = draw_control_footer(screen_type="terminal", width=width, styled=True)
 
-        sys.stdout.write("\033[H\033[J")
-        sys.stdout.write(layout + "\n")
-        sys.stdout.write(pad_to_width(footer, width, align="center") + "\n")
-        sys.stdout.flush()
+        if ui is None:
+            sys.stdout.write("\033[H\033[J")
+            sys.stdout.write(layout + "\n")
+            sys.stdout.write(pad_to_width(footer, usable_w, align="center") + "\n")
+            sys.stdout.flush()
+
+        # Calculate exact row and col of the active prompt inside the TERMINAL pane
+        needed_task_height = len(task_content) + 3
+        max_task_height = max(5, layout_h - 8)
+        task_height = max(5, min(needed_task_height, max_task_height))
+        term_height = layout_h - task_height
+        term_max_content = term_height - 3
+        sliced_term = display_term_logs[-term_max_content:] if len(display_term_logs) > term_max_content else display_term_logs
+        prompt_idx = len(sliced_term) - 1
+        prompt_row = task_height + 3 + prompt_idx
+        prompt_col = 3 + visual_len(active_prompt)
+
+        if ui is not None:
+            ui.show_lesson(
+                player=player,
+                quest=quest,
+                active_obj=active_obj,
+                terminal_logs=terminal_logs,
+                docs_content=docs_content,
+                pet=pet,
+                completed_count=completed_count,
+                total_challenges=total_challenges,
+                pct_prog=pct_prog,
+                cwd=cwd_short,
+                theme=theme,
+                vfs=vfs,
+            )
 
         try:
-            prompt = f"\033[1;92mbyte@adventure\033[0m:\033[1;94m{cwd_short}\033[0m$ "
-            user_input = input(prompt).strip()
+            if ui is None and sys.stdin.isatty():
+                sys.stdout.write(f"\033[{prompt_row};{prompt_col}H")
+                sys.stdout.flush()
+                user_input = input("").strip()
+            else:
+                user_input = input("").strip()
         except (KeyboardInterrupt, EOFError):
             save_game(player, cadet_mode)
-            print(f"\n{CYAN}Returning to Main Menu...{RESET}")
+            print(f"\n{theme.fg_cyan}Returning to Main Menu...{RESET}")
             break
 
         if not user_input:
@@ -1231,14 +1521,134 @@ def interactive_game_loop(
 
         input_lower = user_input.lower()
 
-        # Return to main menu
-        if input_lower in ("0", "menu", "main", "back", "title"):
+        # Return to main menu (support 'menu', 'exit', 'quit', '0', and 'esc')
+        if input_lower in ("0", "menu", "main", "back", "title", "exit", "quit", "esc", "escape", "\x1b", ":q", ":x"):
             save_game(player, cadet_mode)
             break
 
-        if input_lower in ("exit", "quit"):
-            save_game(player, cadet_mode)
-            break
+        # Command Center palette (Ctrl+Space / \x00, :cmd, :menu, :space, cmd)
+        if user_input in ("\x00", "\x00\x00") or input_lower in (
+            ":cmd", ":space", ":menu", "cmd", ":center", ":p", "palette",
+            "ctrl+space", "ctrl-space", "ctrl space", "<c-space>", "^space",
+        ):
+            action = run_command_center(player, all_quests, width)
+            if action == "search_docs":
+                terminal_logs.append(f"{CYAN}[+] Type 'search <query>' to filter local documentation.{RESET}")
+            elif action == "choose_challenge":
+                view_map(app.mainframe, player, all_quests, width)
+            elif action == "reset_challenge":
+                vfs.load_sector(quest.sector_id, quest)
+                for o in quest.objectives:
+                    o.completed = False
+                pet.react_error()
+                terminal_logs.append(f"{YELLOW}[!] Challenge reset. Sector filesystem restored to initial state.{RESET}")
+            elif action == "open_manual":
+                terminal_logs.append(f"{CYAN}[+] Type 'man <command>' for context-aware field manual pages.{RESET}")
+            continue
+
+        if input_lower in (":progress", "progress", ":dashboard"):
+            view_progress_dashboard(player, all_quests, width=width)
+            continue
+
+        if input_lower in (":games", "games", ":arcade", "arcade", "minigame", "puzzle"):
+            view_minigames_hub(player, app.minigame, width=width, ui=ui)
+            continue
+
+        if input_lower in (":reset", "reset"):
+            vfs.load_sector(quest.sector_id, quest)
+            for o in quest.objectives:
+                o.completed = False
+            pet.react_error()
+            terminal_logs.append(f"{prompt_prefix} reset{RESET}")
+            terminal_logs.append(f"{CYAN}[!] Current challenge reset. Sector filesystem restored to fresh state.{RESET}")
+            continue
+
+        if input_lower in (":pet", "pet"):
+            new_state = pet.toggle()
+            status_txt = "awake & active" if new_state else "resting"
+            terminal_logs.append(f"{prompt_prefix} pet{RESET}")
+            terminal_logs.append(f"{CYAN}[+] Terminal Pet Byte is now {status_txt}.{RESET}")
+            continue
+
+        if input_lower in (":settings", ":setting", "settings", "diagnostics", "diag"):
+            from cybershell.ui.command_center import run_settings_view
+            run_settings_view(player, width=width)
+            continue
+
+        if input_lower in (":chmod", ":perm", ":decoder"):
+            from cybershell.tools.minigames.chmod_decoder import play_chmod_decoder_interactive
+            play_chmod_decoder_interactive(player, width=width)
+            continue
+
+        if input_lower.startswith("decode ") or input_lower.startswith("perm ") or input_lower.startswith("chmod --decode "):
+            from cybershell.tools.minigames.chmod_decoder import format_decoded_permission
+            parts = user_input.split(maxsplit=2)
+            perm_val = parts[1].strip() if len(parts) > 1 else ""
+            if perm_val == "--decode" and len(parts) > 2:
+                perm_val = parts[2].strip()
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
+            if perm_val:
+                decoded_txt = format_decoded_permission(perm_val, styled=True)
+                for d_line in decoded_txt.splitlines():
+                    terminal_logs.append(d_line)
+            else:
+                terminal_logs.append(f"{YELLOW}Usage: decode <mode> (e.g. decode 755, decode rwxr-xr-x){RESET}")
+            continue
+
+        if (input_lower.startswith("chmod ") or input_lower == "chmod") and len(user_input.split()) <= 2:
+            parts = user_input.split()
+            if len(parts) == 1:
+                from cybershell.tools.minigames.chmod_decoder import play_chmod_decoder_interactive
+                play_chmod_decoder_interactive(player, width=width)
+                continue
+            elif len(parts) == 2 and not vfs.exists(parts[1]):
+                from cybershell.tools.minigames.chmod_decoder import format_decoded_permission
+                perm_candidate = parts[1]
+                terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
+                decoded_txt = format_decoded_permission(perm_candidate, styled=True)
+                for d_line in decoded_txt.splitlines():
+                    terminal_logs.append(d_line)
+                terminal_logs.append(f"{DIM}To apply to a file, run: chmod {perm_candidate} <filename>{RESET}")
+                continue
+
+        if input_lower in (":anim", "anim"):
+            ambience = get_ambience_manager()
+            a_on = ambience.toggle_calm_animations()
+            terminal_logs.append(f"{prompt_prefix} anim{RESET}")
+            terminal_logs.append(f"{CYAN}[+] Calm animations are now {'ON' if a_on else 'OFF'}.{RESET}")
+            continue
+
+        # Direct theme switching (e.g. ':theme foss', 'theme dracula', or typing 'foss', 'sakura', 'nord' directly)
+        theme_cand = ""
+        if input_lower.startswith(":theme ") or input_lower.startswith("theme "):
+            theme_cand = user_input.split(maxsplit=1)[1].strip()
+        else:
+            all_theme_names = set(THEMES.keys()) | {t.display_name.lower() for t in THEMES.values()} | {"pastel", "lavender", "sakura", "mint", "peach", "catppuccin"}
+            if input_lower in all_theme_names:
+                theme_cand = input_lower
+
+        if theme_cand:
+            if set_theme(theme_cand):
+                new_th = get_active_theme()
+                terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
+                terminal_logs.append(f"{BOLD}{new_th.fg_green}[✓] Active theme switched to {new_th.display_name}!{RESET}")
+                continue
+
+        if input_lower in (":theme", "theme", "themes"):
+            run_theme_selector(width=width)
+            continue
+
+        if input_lower.startswith(":man ") or input_lower.startswith("man "):
+            parts = user_input.split(maxsplit=1)
+            cmd_name = parts[1].strip() if len(parts) > 1 else ""
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
+            if cmd_name:
+                field_manual_text = format_field_manual_entry(cmd_name)
+                for fm_line in field_manual_text.splitlines():
+                    terminal_logs.append(f"{WHITE}{fm_line}{RESET}")
+            else:
+                terminal_logs.append(f"{YELLOW}Usage: man <command> (e.g. man ls, man mkdir, man chmod){RESET}")
+            continue
 
         # In-game viewers
         if input_lower in ("codex",):
@@ -1253,41 +1663,45 @@ def interactive_game_loop(
             view_map(app.mainframe, player, all_quests, width)
             continue
 
-        if input_lower in ("minigame", "puzzle"):
-            view_minigame(app.minigame, player, width)
-            continue
-
         if input_lower == "clear":
             terminal_logs = []
             continue
 
         if input_lower.startswith("search "):
-            docs_filter_term = input_lower[7:].strip()
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
-            terminal_logs.append(f"{CYAN}Filtered LOCAL DOCS by '{docs_filter_term}'{RESET}")
+            query = input_lower[7:].strip()
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
+            if query in ("*", "all", "clear", "reset"):
+                docs_filter_term = ""
+                terminal_logs.append(f"{CYAN}[+] Local docs search filter cleared.{RESET}")
+            else:
+                docs_filter_term = query
+                results = fuzzy_search_commands(query, app.codex.list_commands(), limit=6)
+                terminal_logs.append(f"{CYAN}Docs: '{query}' ({len(results)} matches){RESET}")
+                for t_line in render_telescope_results(query, results, width=min(task_inner_w + 2, 65), styled=True):
+                    terminal_logs.append(t_line)
             continue
         elif input_lower == "search":
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             docs_filter_term = ""
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
-            terminal_logs.append(f"{CYAN}Cleared LOCAL DOCS filter.{RESET}")
+            terminal_logs.append(f"{CYAN}[+] Local docs search filter cleared.{RESET}")
             continue
 
         if input_lower == "save":
             saved = save_game(player, cadet_mode)
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ save{RESET}")
+            terminal_logs.append(f"{prompt_prefix} save{RESET}")
             if saved:
-                terminal_logs.append(f"{GREEN}💾 Progress saved successfully!{RESET}")
+                terminal_logs.append(f"{GREEN}[OK] Progress saved successfully!{RESET}")
             else:
                 terminal_logs.append(f"{RED}Failed to write save file.{RESET}")
             continue
 
         if input_lower in ("status", "badges", "stats"):
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             terminal_logs.append(f"{CYAN}{BOLD}[ EXPLORER STATS ]{RESET}")
             terminal_logs.append(
                 f"  {WHITE}Explorer:{RESET} {CYAN}{player.character_name}{RESET}  "
                 f"{YELLOW}Level:{RESET} {player.current_sector + 1}/15  "
-                f"{YELLOW}⭐ XP:{RESET} {player.xp}  "
+                f"{YELLOW}XP:{RESET} {player.xp}  "
                 f"{GREEN}Streak:{RESET} {getattr(player, 'streak', 0)}"
             )
             raw_badges = getattr(player, "badges", [])
@@ -1296,7 +1710,7 @@ def interactive_game_loop(
             continue
 
         if input_lower.startswith("tree"):
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             parts = user_input.split(maxsplit=1)
             target_path = parts[1] if len(parts) > 1 else "."
             node = vfs.resolve_path(target_path)
@@ -1311,20 +1725,21 @@ def interactive_game_loop(
             continue
 
         if input_lower.startswith("explain"):
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             for el in explain_command(user_input, active_obj):
                 terminal_logs.append(el)
             continue
 
         if input_lower in ("hint", "?"):
-            terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {user_input}{RESET}")
+            terminal_logs.append(f"{prompt_prefix} {user_input}{RESET}")
             if not active_obj:
-                terminal_logs.append(f"{GREEN}All goals in this level are complete! Great job! 🌱{RESET}")
+                terminal_logs.append(f"{GREEN}All goals in this level are complete! Great job!{RESET}")
             else:
+                pet.react_hint()
                 if hasattr(player, "use_hint"):
                     player.use_hint()
                 h_msg, _ = get_progressive_hint(active_obj, hint_tier, cadet_mode=True)
-                terminal_logs.append(f"{YELLOW}{BOLD}💡 {h_msg}{RESET}")
+                terminal_logs.append(f"{YELLOW}{BOLD}[HINT {hint_tier}/3] {h_msg}{RESET}")
                 hint_tier = min(3, hint_tier + 1)
             continue
 
@@ -1333,7 +1748,6 @@ def interactive_game_loop(
         # Check for option selection [A/B/C/D] or [1/2/3/4]
         opt_cmd, opt_msg = resolve_option_choice(user_input, active_obj)
         if opt_cmd is not None:
-            terminal_logs.append(f"{GREEN}{opt_msg}{RESET}")
             actual_cmd = opt_cmd
         elif opt_msg is not None:
             terminal_logs.append(f"{YELLOW}{opt_msg}{RESET}")
@@ -1344,7 +1758,7 @@ def interactive_game_loop(
             if active_obj and getattr(active_obj, "options", None) and idx < len(active_obj.options):
                 opt_str = active_obj.options[idx]
                 cmd_to_show = opt_str.split(" - ")[0].strip()
-                terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {cmd_to_show}{RESET}")
+                terminal_logs.append(f"{prompt_prefix} {cmd_to_show}{RESET}")
                 res = interpreter.execute(cmd_to_show)
                 if res.stdout:
                     first_cmd = cmd_to_show.split()[0] if cmd_to_show.split() else ""
@@ -1357,7 +1771,6 @@ def interactive_game_loop(
                 if res.stderr:
                     for err_line in res.stderr.splitlines():
                         terminal_logs.append(f"{RED}{err_line}{RESET}")
-                terminal_logs.append(f"{DIM}💡 Output shown above. Review the question card to find the command needed for this task!{RESET}")
             continue
         else:
             actual_cmd = user_input
@@ -1366,13 +1779,15 @@ def interactive_game_loop(
         typo = check_typo_or_syntax(actual_cmd)
 
         # Execute command in VFS
-        terminal_logs.append(f"{GREEN}byte@adventure:{cwd_short}$ {actual_cmd}{RESET}")
+        terminal_logs.append(f"{prompt_prefix} {actual_cmd}{RESET}")
+        if opt_cmd is not None and opt_msg:
+            terminal_logs.append(f"{CYAN}{opt_msg}{RESET}")
         result = interpreter.execute(actual_cmd)
 
         if typo:
             sugg, expl = typo
             
-            terminal_logs.append(f"{YELLOW}💡 [TIP] Detected '{actual_cmd}'. Did you mean '{sugg}'? {expl}{RESET}")
+            terminal_logs.append(f"{YELLOW}[TIP] Detected '{actual_cmd}'. Did you mean '{sugg}'? {expl}{RESET}")
 
         if result.stdout:
             first_cmd = actual_cmd.split()[0] if actual_cmd.split() else ""
@@ -1384,10 +1799,10 @@ def interactive_game_loop(
                     terminal_logs.append(f"{WHITE}{out_line}{RESET}")
 
         if result.stderr:
+            pet.react_error(result.stderr)
             for err_line in result.stderr.splitlines():
                 terminal_logs.append(f"{RED}{err_line}{RESET}")
-            if not typo:
-                terminal_logs.append(f"{DIM}💡 Type '?' or 'help' if you'd like a hint.{RESET}")
+
 
         # Objective evaluation
         old_level = player.level
@@ -1401,6 +1816,13 @@ def interactive_game_loop(
                 terminal_logs.append(f"{DIM}✓ Done!{RESET}")
 
         if newly_completed:
+            pet.react_success(actual_cmd)
+            feedback_oks = [
+                "✓ Nice. The shell approves.",
+                "✓ Clean execution. Moving to next sector.",
+                "✓ Filesystem verified. Well done.",
+            ]
+            terminal_logs.append(f"{GREEN}{random.choice(feedback_oks)}{RESET}")
             hint_tier = 1
             reward_sum = sum(
                 (next((o.xp_reward for o in quest.objectives if o.id == item), 50) if isinstance(item, str) else item.xp_reward)
@@ -1421,26 +1843,11 @@ def interactive_game_loop(
                 elif quest.sector_id not in player.completed_sectors:
                     player.completed_sectors.append(quest.sector_id)
 
-                celebration = CelebrationEffect.render_celebration(
-                    title=f"LEVEL {quest.sector_id + 1} COMPLETED!",
-                    subtitle=f"Sector: {quest.sector_name.upper()} | +{reward_sum} XP",
-                    width=width,
-                    animate=False,
-                )
-                for c_line in celebration.splitlines():
-                    terminal_logs.append(c_line)
+                # Store item in player inventory without crowded screen spam
+                if quest.reward_item and hasattr(player, "inventory") and quest.reward_item not in player.inventory:
+                    player.inventory.append(quest.reward_item)
 
-                # Show badge status change only after level completion (not in between tasks)
-                curr_badges = list(getattr(player, "badges", []))
-                level_badges = [b for b in curr_badges if b not in level_start_badges]
-                if level_badges:
-                    for nb in level_badges:
-                        terminal_logs.append(f"{YELLOW}🏆 BADGE UNLOCKED: [{nb}]{RESET}")
-                    terminal_logs.append(f"{CYAN}Explorer Badges: {len(curr_badges)}/15 Unlocked ⭐{RESET}")
-                level_start_badges = list(curr_badges)
-
-                if quest.reward_item:
-                    terminal_logs.append(f"{YELLOW}🎁 GOODIE ACQUIRED: {quest.reward_item.name} - {quest.reward_item.description}{RESET}")
+                terminal_logs.append(f"{GREEN}{BOLD}[✓] Level {quest.sector_id + 1} completed! (+{reward_sum} XP){RESET}")
 
                 next_sector = player.current_sector + 1
                 if next_sector in all_quests:
@@ -1448,52 +1855,42 @@ def interactive_game_loop(
                     quest = all_quests[next_sector]
                     vfs.load_sector(next_sector, quest)
                     save_game(player, cadet_mode)
-
-                    unlock_banner = get_level_unlocked_banner(
-                        sector_num=next_sector + 1,
-                        sector_name=quest.sector_name,
-                        width=min(width - 4, 60),
-                        styled=True,
-                    )
-                    for u_line in unlock_banner.splitlines():
-                        terminal_logs.append(u_line)
-                    Typewriter.stream_text(f'"{quest.lore[:80]}..."', delay=0.02, styled_prefix=f"{GREEN}Guide {quest.npc_name}: ")
-                    terminal_logs.append(f"{GREEN}Guide {quest.npc_name}: \"{quest.lore[:80]}...\"{RESET}")
+                    terminal_logs.append(f"{CYAN}Entering Level {next_sector + 1}: {quest.sector_name}{RESET}")
                 else:
                     save_game(player, cadet_mode)
-                    for v_line in get_victory_banner(styled=True).splitlines():
-                        terminal_logs.append(v_line)
+                    terminal_logs.append(f"{GREEN}{BOLD}[✓] All 15 levels completed! Congratulations!{RESET}")
             else:
-                # Clean slate for next question in this level! ("one task kazhiyumbo")
-                completed_names = []
-                for item in newly_completed:
-                    matched_obj = next((o for o in quest.objectives if o.id == item), None) if isinstance(item, str) else item
-                    desc = matched_obj.description if matched_obj else str(item)
-                    completed_names.append(desc)
-                summary_text = " & ".join(completed_names)
-                terminal_logs.append(f"{GREEN}✓ Task Cleared: {summary_text} (+{reward_sum} XP ⭐){RESET}")
-                terminal_logs.append(f"{CYAN}Here is your next challenge question! Check the card above. 🌱{RESET}")
+                terminal_logs.append(f"{GREEN}[✓] Objective cleared! (+{reward_sum} XP){RESET}")
 
         if player.level > old_level:
-            terminal_logs.append(f"{MAGENTA}{BOLD}🌟 LEVEL UP! You reached Level {player.level}! Title: {player.rank}{RESET}")
-            Typewriter.stream_text(f"🌟 LEVEL UP! You reached Level {player.level}! Title: {player.rank}", delay=0.015, styled_prefix=f"{MAGENTA}{BOLD}")
+            terminal_logs.append(f"{MAGENTA}{BOLD}[+] LEVEL UP! You reached Level {player.level}! Title: {player.rank}{RESET}")
 
 
 # =============================================================================
 # MAIN MENU CONTROLLER LOOP
 # =============================================================================
 
-def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
-    """Main menu loop with navigation and first-time field manual."""
-    saved_data = load_saved_game()
+def main_menu_loop(character_name: str = "Byte", start_sector: int = 0, ui: Optional[Any] = None) -> None:
+    """Main menu loop with navigation, profile switching, and first-time field manual."""
+    width, _ = terminal_size()
+    last_user = get_last_saved_username() or (character_name if character_name != "Byte" else "Explorer")
+
+    # Prompt user on launch to confirm active explorer or switch to a new user
+    if sys.stdin.isatty():
+        active_user = prompt_player_onboarding(width=width, current_name=last_user, ui=ui)
+    else:
+        active_user = character_name or "Explorer"
+
+    saved_data = load_saved_game(username=active_user)
     cadet_mode = True
     first_launch = saved_data is None
 
     if saved_data is not None:
         player, cadet_mode = saved_data
+        player.character_name = active_user
     else:
         player = PlayerStats(
-            character_name=character_name,
+            character_name=active_user,
             hp=100,
             max_hp=100,
             xp=0,
@@ -1512,45 +1909,87 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
         xp=player.xp,
     )
 
-    # First launch shows the mandatory Field Manual & Rules screen!
     if first_launch:
-        width, _ = terminal_size()
-        show_mandatory_field_manual(width)
-        interactive_game_loop(
-            character_name=player.character_name,
-            start_sector=0,
-            player=player,
-            vfs=vfs,
-            interpreter=interpreter,
-            evaluator=evaluator,
-            all_quests=all_quests,
-            app=app,
-            cadet_mode=cadet_mode,
-        )
+        save_game(player, cadet_mode)
 
     while True:
-        has_save = os.path.isfile(SAVE_FILE_PATH)
-        width, _ = terminal_size()
-        sys.stdout.write("\033[H\033[J")
-        print(render_opening_screen(player, width, cadet_mode=cadet_mode, has_save=has_save))
+        user_save = get_save_path(player.character_name)
+        has_save = (os.path.isfile(user_save) or os.path.isfile(SAVE_FILE_PATH)) and (
+            player.current_sector > 0 or player.xp > 0 or len(player.completed_sectors) > 0
+        )
+        width, height = terminal_size()
+        if ui is None:
+            sys.stdout.write("\033[H\033[J")
+            top_margin = max(0, (height - 34) // 2)
+            if top_margin > 0:
+                sys.stdout.write("\n" * top_margin)
+            print(render_opening_screen(player, width, cadet_mode=cadet_mode, has_save=has_save))
+        else:
+            ui.show_home(player, has_save)
 
-        max_option = 7 if has_save else 6
+        max_option = 8 if has_save else 7
+        card_w = min(max(44, width - 4), 74)
+        indent_len = max(0, (width - card_w) // 2 + 2)
+        indent_str = " " * indent_len
+        prompt_text = f"Choose an option [0-{max_option}, T] (or ESC to exit, default: 1): "
         try:
-            choice = input(f"\n{YELLOW}Choose an option [0-{max_option}] (default: 1): {RESET}").strip()
+            choice = input(f"{indent_str}{YELLOW}{prompt_text}{RESET}" if ui is None else "").strip()
         except (KeyboardInterrupt, EOFError):
-            print(f"\n{CYAN}See you next time! Happy exploring 🌱{RESET}\n")
+            print(f"\n{CYAN}See you next time! Session closed.{RESET}\n")
             break
 
         if not choice:
             choice = "1"
 
         choice_lower = choice.lower()
-        if choice_lower in ("0", "exit", "quit", "q"):
-            print(f"\n{CYAN}See you next time! Happy exploring 🌱{RESET}\n")
+        if choice_lower in ("0", "exit", "quit", "q", "esc", "escape", "\x1b"):
+            print(f"\n{CYAN}See you next time! Session closed.{RESET}\n")
             break
 
+        # Switch active profile / user directly in menu
+        if choice_lower in ("user", "profile", "switch", ":user", ":profile"):
+            p_name = prompt_player_onboarding(width, current_name=player.character_name, ui=ui)
+            if p_name and p_name != player.character_name:
+                active_user = p_name
+                saved_data = load_saved_game(username=active_user)
+                if saved_data is not None:
+                    player, cadet_mode = saved_data
+                    player.character_name = active_user
+                else:
+                    player = PlayerStats(
+                        character_name=active_user,
+                        hp=100,
+                        max_hp=100,
+                        xp=0,
+                        current_sector=0,
+                    )
+                    save_game(player, cadet_mode)
+                app.character_name = active_user
+            continue
+
+        # Direct theme switching in the first interface
+        direct_theme_target = choice_lower
+        for pfx in (":theme ", "theme ", ":theme", "theme"):
+            if direct_theme_target.startswith(pfx):
+                direct_theme_target = direct_theme_target[len(pfx):].strip()
+                break
+
+        all_theme_names = set(THEMES.keys()) | {t.display_name.lower() for t in THEMES.values()} | {"pastel", "lavender", "sakura", "mint", "peach", "catppuccin"}
+        if direct_theme_target in all_theme_names or choice_lower in all_theme_names:
+            target_to_set = direct_theme_target if direct_theme_target in all_theme_names else choice_lower
+            if set_theme(target_to_set):
+                new_theme = get_active_theme()
+                print(f"\n{BOLD}{new_theme.fg_green}[✓] Active theme switched to {new_theme.display_name}!{RESET}")
+                import time
+                time.sleep(0.35)
+                continue
+
+        if choice_lower in ("t", "theme", ":theme"):
+            run_theme_selector(width)
+            continue
+
         if has_save:
-            if choice_lower in ("1", "continue", "resume", "c", "start"):
+            if choice_lower in ("1", "continue", "resume", "c", "start", "e"):
                 interactive_game_loop(
                     character_name=player.character_name,
                     start_sector=player.current_sector,
@@ -1561,19 +2000,23 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                     all_quests=all_quests,
                     app=app,
                     cadet_mode=cadet_mode,
+                    ui=ui,
                 )
-            elif choice_lower in ("2", "new", "reset"):
-                delete_saved_game()
+            elif choice_lower in ("2", "new", "reset", "n"):
+                delete_saved_game(username=player.character_name)
+                p_name = prompt_player_onboarding(width, current_name=player.character_name, ui=ui) if sys.stdin.isatty() else player.character_name
                 player = PlayerStats(
-                    character_name=character_name,
+                    character_name=p_name,
                     hp=100,
                     max_hp=100,
                     xp=0,
                     current_sector=0,
                 )
+                app.character_name = p_name
                 vfs = VirtualFileSystem(default_user="byte")
                 interpreter = Interpreter(vfs=vfs)
                 all_quests = get_sector_quests()
+                save_game(player, cadet_mode)
                 show_mandatory_field_manual(width)
                 interactive_game_loop(
                     character_name=player.character_name,
@@ -1585,25 +2028,30 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                     all_quests=all_quests,
                     app=app,
                     cadet_mode=cadet_mode,
+                    ui=ui,
                 )
-            elif choice_lower in ("3", "map"):
+            elif choice_lower in ("3", "map", "m"):
                 view_map(app.mainframe, player, all_quests, width)
-            elif choice_lower in ("4", "codex", "guide"):
+            elif choice_lower in ("4", "codex", "guide", "find"):
                 view_codex(app.codex, player, width)
-            elif choice_lower in ("5", "items", "inventory", "backpack"):
+            elif choice_lower in ("5", "items", "inventory", "backpack", "b"):
                 view_inventory(player, width)
-            elif choice_lower in ("6", "minigame", "puzzle", "chmod"):
-                view_minigame(app.minigame, player, width)
-            elif choice_lower in ("7", "manual", "help", "rules"):
+            elif choice_lower in ("6", "chmod", "perm", "decoder", "puzzle"):
+                from cybershell.tools.minigames.chmod_decoder import play_chmod_decoder_interactive
+                play_chmod_decoder_interactive(player, width=width)
+            elif choice_lower in ("7", "arcade", "minigame", "games"):
+                from cybershell.tools.minigames.hub import view_minigames_hub
+                view_minigames_hub(player, width=width, ui=ui)
+            elif choice_lower in ("8", "manual", "help", "rules", "h", "?"):
                 view_field_manual(width)
             else:
-                print(f"\n{RED}That's not an option here 🙂 Please choose [0-{max_option}].{RESET}")
+                print(f"\n{RED}That's not a valid option. Please choose [0-{max_option}].{RESET}")
                 try:
                     input(f"{YELLOW}Press Enter to continue...{RESET}")
                 except (KeyboardInterrupt, EOFError):
                     break
         else:
-            if choice_lower in ("1", "start", "play"):
+            if choice_lower in ("1", "start", "play", "e", "explore"):
                 show_mandatory_field_manual(width)
                 interactive_game_loop(
                     character_name=player.character_name,
@@ -1615,19 +2063,24 @@ def main_menu_loop(character_name: str = "Byte", start_sector: int = 0) -> None:
                     all_quests=all_quests,
                     app=app,
                     cadet_mode=cadet_mode,
+                    ui=ui,
                 )
-            elif choice_lower in ("2", "map"):
+            elif choice_lower in ("2", "map", "m"):
                 view_map(app.mainframe, player, all_quests, width)
-            elif choice_lower in ("3", "codex", "guide"):
+            elif choice_lower in ("3", "codex", "guide", "find"):
                 view_codex(app.codex, player, width)
-            elif choice_lower in ("4", "items", "inventory", "backpack"):
+            elif choice_lower in ("4", "items", "inventory", "backpack", "b"):
                 view_inventory(player, width)
-            elif choice_lower in ("5", "minigame", "puzzle", "chmod"):
-                view_minigame(app.minigame, player, width)
-            elif choice_lower in ("6", "manual", "help", "rules"):
+            elif choice_lower in ("5", "chmod", "perm", "decoder", "puzzle"):
+                from cybershell.tools.minigames.chmod_decoder import play_chmod_decoder_interactive
+                play_chmod_decoder_interactive(player, width=width)
+            elif choice_lower in ("6", "arcade", "minigame", "games"):
+                from cybershell.tools.minigames.hub import view_minigames_hub
+                view_minigames_hub(player, width=width, ui=ui)
+            elif choice_lower in ("7", "manual", "help", "rules", "h", "?"):
                 view_field_manual(width)
             else:
-                print(f"\n{RED}That's not an option here 🙂 Please choose [0-{max_option}].{RESET}")
+                print(f"\n{RED}That's not a valid option. Please choose [0-{max_option}].{RESET}")
                 try:
                     input(f"{YELLOW}Press Enter to continue...{RESET}")
                 except (KeyboardInterrupt, EOFError):
@@ -1668,6 +2121,12 @@ def main() -> int:
 
     if args.demo:
         run_demo(args.name)
+        return 0
+
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        from cybershell.ui.textual_app import run_textual
+
+        run_textual(args.name, args.sector)
         return 0
 
     try:
