@@ -7,7 +7,7 @@ friendly activity ticker, and interactive screens.
 from __future__ import annotations
 
 import sys
-from typing import List, Optional
+from typing import List, Optional, Any
 
 # Ensure Windows terminals handle UTF-8 box characters and ASCII art cleanly
 if hasattr(sys.stdout, "reconfigure"):
@@ -406,7 +406,7 @@ class RPGApp:
 
         card_w = max(46, min(width - 4, 76))
         panel_lines = draw_panel(gradient_text("COMMAND GUIDE", HEX_PURPLE, HEX_CYAN), content, card_w, styled=True, border_color=fg_hex(HEX_PURPLE))
-        centered_panel = "\n".join(pad_to_width(l, width, align="center") for l in panel_lines)
+        centered_panel = "\n".join(pad_to_width(line, width, align="center") for line in panel_lines)
         return header + "\n\n" + centered_panel + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
 
     def render_map(self, width: int = 80) -> str:
@@ -468,7 +468,7 @@ class RPGApp:
 
         card_w = max(46, min(width - 4, 76))
         panel_lines = draw_panel(gradient_text("BACKPACK", HEX_YELLOW, HEX_GREEN), content, card_w, styled=True, border_color=fg_hex(HEX_YELLOW))
-        centered_panel = "\n".join(pad_to_width(l, width, align="center") for l in panel_lines)
+        centered_panel = "\n".join(pad_to_width(line, width, align="center") for line in panel_lines)
         return header + "\n\n" + centered_panel + "\n\n" + pad_to_width(draw_control_footer("info", width), width, align="center")
 
     def render_manual(self, width: int = 80, page: int = 1, styled: bool = False) -> str:

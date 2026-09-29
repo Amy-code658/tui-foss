@@ -212,7 +212,7 @@ def animate_tux_welcome(
         return
 
     from cybershell.ui.ascii_art import get_foss_penguin
-    from cybershell.ui.theme import get_active_theme, BOLD, RESET
+    from cybershell.ui.theme import get_active_theme, RESET
     from cybershell.ui.renderer import pad_to_width
 
     th = get_active_theme()

@@ -11,7 +11,7 @@ Zero emojis, clean developer styling.
 from __future__ import annotations
 
 import sys
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Any, Union
 
 from cybershell.contracts import PlayerStats
 from cybershell.tools.chmod_calc import (

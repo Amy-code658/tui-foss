@@ -118,8 +118,6 @@ from cybershell.ui.theme import (
     HEX_BG_DARK,
     HEX_BLUE,
     FG_BORDER,
-    RESET,
-    BOLD,
     FG_WHITE,
     FG_MUTED,
 )
@@ -815,7 +813,6 @@ def render_opening_screen(
     status_line = pad_to_width(status_text, term_w, align="center")
 
     # 3. Main Directory Menu Layout
-    from cybershell.ui.renderer import draw_panel
     from cybershell.ui.theme import fg_hex
 
     menu_title = "MAIN DIRECTORY • CHOOSE A DESTINATION"

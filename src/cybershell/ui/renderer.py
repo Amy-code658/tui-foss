@@ -771,7 +771,7 @@ def draw_opencode_layout(
     right_col = docs_panel + mascot_panel
 
     rows = []
-    for r_idx, (l, r) in enumerate(zip(left_col, right_col)):
+    for r_idx, (left_l, r) in enumerate(zip(left_col, right_col)):
         if r_enabled and styled and ambience:
             drop_ch = ambience.get_rain_char_at(col=left_width, row=r_idx, color=c_col)
             if drop_ch:
@@ -780,7 +780,7 @@ def draw_opencode_layout(
                 gap_str = " " * gap
         else:
             gap_str = " " * gap
-        rows.append(l + gap_str + r)
+        rows.append(left_l + gap_str + r)
 
     return "\n".join(rows)
 
