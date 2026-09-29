@@ -256,8 +256,8 @@ class TerminalInput(Static):
             self._complete()
         elif key == "space":
             self._insert(" ")
-        elif len(key) == 1 and key.isprintable():
-            self._insert(key)
+        elif event.is_printable and event.character:
+            self._insert(event.character)
         else:
             return
         self._redraw()
