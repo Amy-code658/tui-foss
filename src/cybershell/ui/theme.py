@@ -401,6 +401,17 @@ THEMES: Dict[str, Theme] = {
         yellow="#fbbf24", purple="#a78bfa", red="#f87171",
         teal="#2dd4bf", white="#ffffff",
     ),
+    "ocean": Theme(
+        id="ocean",
+        display_name="Ocean",
+        is_light=False,
+        bg_dark="#0b1e2d", surface="#112b3f", surface_light="#1a3b54",
+        border="#2a5573", border_focus="#4dd0e1",
+        text="#d6ebf5", text_muted="#6b8ca3",
+        cyan="#4dd0e1", blue="#5aa9e6", green="#7fd1ae",
+        yellow="#f2c879", purple="#9d8df1", red="#f0717f",
+        teal="#26a69a", white="#ffffff",
+    ),
 }
 
 _active_theme_id: str = "tokyo-night"
